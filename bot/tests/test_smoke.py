@@ -15,7 +15,7 @@ os.environ.setdefault("TG_MANAGER_ID", "3")
 
 
 def test_imports() -> None:
-    from src import config, db, llm, osrm  # noqa: F401
+    from src import config, db, llm, osrm, scheduler  # noqa: F401
     from src.handlers import channel, group, private  # noqa: F401
     from src.modules import (  # noqa: F401
         m1_parse_request,
@@ -25,6 +25,18 @@ def test_imports() -> None:
         m5_negotiation,
         m6_report,
     )
+
+
+def test_scheduler_setup() -> None:
+    """Шедулер должен собираться с тремя джобами и не падать на старте."""
+    from unittest.mock import MagicMock
+
+    from src.scheduler import setup
+
+    bot = MagicMock()
+    scheduler = setup(bot)
+    job_ids = {j.id for j in scheduler.get_jobs()}
+    assert job_ids == {"publish_new", "close_collection", "finalize_negotiation"}
 
 
 def test_m1_missing_required() -> None:

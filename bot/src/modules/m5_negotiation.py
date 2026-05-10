@@ -77,5 +77,8 @@ async def run(bot: Bot, request_id: str) -> list[dict[str, Any]]:
         )
         invited.append(offer)
 
-    db.update_request(request_id, {"status": "negotiating"})
+    db.update_request(
+        request_id,
+        {"status": "negotiating", "negotiation_started_at": "now()"},
+    )
     return invited

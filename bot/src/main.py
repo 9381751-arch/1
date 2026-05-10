@@ -11,6 +11,7 @@ from aiogram.enums import ParseMode
 
 from .config import settings
 from .handlers import channel, group, private
+from .scheduler import setup as setup_scheduler
 
 
 def setup_logging() -> None:
@@ -34,8 +35,15 @@ async def main() -> None:
     dp.include_router(group.router)
     dp.include_router(private.router)
 
+    scheduler = setup_scheduler(bot)
+    scheduler.start()
+    log.info("scheduler started (3 jobs, interval 60s)")
+
     log.info("bot starting (model=%s)", settings.claude_model)
-    await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    try:
+        await dp.start_polling(bot, allowed_updates=dp.resolve_used_update_types())
+    finally:
+        scheduler.shutdown(wait=False)
 
 
 if __name__ == "__main__":
