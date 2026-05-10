@@ -23,8 +23,8 @@ async function createRequest(formData: FormData) {
     .insert(payload)
     .select("id")
     .single();
-  if (error) throw new Error(error.message);
-  redirect(`/requests/${data.id}`);
+  if (error || !data) throw new Error(error?.message ?? "Не удалось создать заявку");
+  redirect(`/requests/${(data as { id: string }).id}`);
 }
 
 function numberOrNull(v: FormDataEntryValue | null): number | null {

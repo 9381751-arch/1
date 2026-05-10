@@ -1,5 +1,7 @@
-import { createServerClient } from "@supabase/ssr";
+import { type CookieOptions, createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+
+type CookieToSet = { name: string; value: string; options: CookieOptions };
 
 export function createClient() {
   const cookieStore = cookies();
@@ -11,7 +13,7 @@ export function createClient() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet) {
+        setAll(cookiesToSet: CookieToSet[]) {
           try {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options),
@@ -31,7 +33,12 @@ export function createServiceClient() {
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     {
-      cookies: { getAll: () => [], setAll: () => {} },
+      cookies: {
+        getAll: (): { name: string; value: string }[] => [],
+        setAll: (_cookiesToSet: CookieToSet[]): void => {
+          /* no-op */
+        },
+      },
     },
   );
 }
