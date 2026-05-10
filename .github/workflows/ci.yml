@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  bot:
+    name: bot (pytest)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: bot
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: bot/pyproject.toml
+
+      - name: Установить зависимости
+        run: pip install -e ".[dev]"
+
+      - name: Запустить тесты
+        run: pytest -v
+
+  dashboard:
+    name: dashboard (typecheck + build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Установить зависимости
+        run: npm install --no-audit --no-fund
+
+      - name: Проверить типы
+        run: npm run typecheck
+
+      - name: Собрать
+        run: npm run build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://stub.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: stub-anon-key
+          SUPABASE_SERVICE_ROLE_KEY: stub-service-key
