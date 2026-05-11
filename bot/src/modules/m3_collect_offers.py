@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, TypedDict
 
 from .. import llm
@@ -19,9 +20,10 @@ _REQUIRED = (
     "ready_date",
 )
 
-_SYSTEM = """\
-Ты разбираешь сообщения продавцов б/у шпунта в Telegram. Извлеки параметры
-предложения и верни СТРОГО валидный JSON:
+_SYSTEM_TEMPLATE = """\
+Ты разбираешь сообщения продавцов б/у шпунта в Telegram. Сегодня {today}.
+
+Извлеки параметры предложения и верни СТРОГО валидный JSON:
 
   grade        — марка (Л4/Л5/...), строка или null
   length_m     — длина в метрах, число или null
@@ -35,7 +37,13 @@ _SYSTEM = """\
 
 Если цена указана с НДС — пересчитай в "без НДС" по ставке 20% и поставь
 vat_type="with_vat". Если продавец сказал "без НДС" или "УСН" — оставь
-цену как есть с соответствующим vat_type. Никакого текста вне JSON.
+цену как есть с соответствующим vat_type.
+
+Если готовность указана словами ("через 3 дня", "к понедельнику",
+"сразу"/"в наличии") — преобразуй в YYYY-MM-DD относительно СЕГОДНЯШНЕЙ
+даты, выбирая ближайшее будущее. "В наличии" или "сразу" → сегодняшняя дата.
+
+Никакого текста вне JSON.
 """
 
 
@@ -52,7 +60,8 @@ class ParsedOffer(TypedDict):
 
 
 async def parse(raw_text: str) -> ParsedOffer:
-    data = await llm.complete_json(_SYSTEM, raw_text)
+    system = _SYSTEM_TEMPLATE.format(today=date.today().isoformat())
+    data = await llm.complete_json(system, raw_text)
     return {
         "grade": data.get("grade"),
         "length_m": data.get("length_m"),

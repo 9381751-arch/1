@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+from datetime import date
 from typing import Any, TypedDict
 
 from .. import llm
@@ -14,9 +15,11 @@ from .. import llm
 _REQUIRED = ("grade", "quantity_t", "region", "deadline")
 _OPTIONAL = ("length_m", "condition", "extra_conditions")
 
-_SYSTEM = """\
-Ты — помощник по закупке б/у шпунта в России. Извлекай из текста параметры заявки и
-возвращай СТРОГО валидный JSON со следующими ключами:
+_SYSTEM_TEMPLATE = """\
+Ты — помощник по закупке б/у шпунта в России. Сегодня {today}.
+
+Извлекай из текста параметры заявки и возвращай СТРОГО валидный JSON
+со следующими ключами:
 
   grade            — марка шпунта (например "Л4", "Л5"), строка или null
   length_m         — длина в метрах, число или null
@@ -25,6 +28,10 @@ _SYSTEM = """\
   deadline         — срок в формате YYYY-MM-DD, строка или null
   condition        — состояние 1, 2 или 3, число или null
   extra_conditions — доп. условия одной строкой, либо null
+
+Если в тексте указан срок словами ("до 15 июня", "к концу мая",
+"через неделю") — преобразуй в YYYY-MM-DD относительно СЕГОДНЯШНЕЙ даты,
+выбирая ближайшее будущее (никогда не выбирай дату в прошлом).
 
 Никакого текста вне JSON. Если поле не названо в тексте — ставь null.
 """
@@ -41,7 +48,8 @@ class ParsedRequest(TypedDict):
 
 
 async def parse(raw_text: str) -> ParsedRequest:
-    data = await llm.complete_json(_SYSTEM, raw_text)
+    system = _SYSTEM_TEMPLATE.format(today=date.today().isoformat())
+    data = await llm.complete_json(system, raw_text)
     return {
         "grade": data.get("grade"),
         "length_m": data.get("length_m"),
