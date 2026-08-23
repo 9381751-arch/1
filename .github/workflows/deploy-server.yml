@@ -1,0 +1,67 @@
+# Выкладка калькулятора на собственный сервер по SSH (rsync).
+#
+# Что задать в Settings → Secrets and variables → Actions:
+#   secrets.DEPLOY_HOST      — хост или IP сервера
+#   secrets.DEPLOY_USER      — пользователь SSH
+#   secrets.DEPLOY_PATH      — каталог веб-корня, например /var/www/karkas
+#   secrets.DEPLOY_SSH_KEY   — приватный ключ (весь файл, включая BEGIN/END)
+#   secrets.DEPLOY_PORT      — порт SSH, если не 22 (необязательно)
+#   secrets.DEPLOY_KNOWN_HOSTS — вывод `ssh-keyscan ваш-хост` (необязательно,
+#                                но так деплой не доверяет ключу вслепую)
+#   vars.DEPLOY_ENABLED      — "true", иначе задание пропускается
+#
+# Ключ лучше сделать отдельный, только для деплоя, и ограничить в
+# ~/.ssh/authorized_keys сервера: command="rsync --server ...",no-pty,no-port-forwarding
+name: Deploy to server
+
+on:
+  push:
+    branches: [main]
+    paths: ["index.html", ".github/workflows/deploy-server.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  rsync:
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Подготовить SSH
+        env:
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+          KNOWN: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$KEY" > ~/.ssh/id_deploy
+          chmod 600 ~/.ssh/id_deploy
+          if [ -n "${KNOWN:-}" ]; then
+            printf '%s\n' "$KNOWN" > ~/.ssh/known_hosts
+          else
+            echo "::warning::DEPLOY_KNOWN_HOSTS не задан — ключ хоста принимается по первому подключению"
+            ssh-keyscan -p "${PORT:-22}" -H "$HOST" >> ~/.ssh/known_hosts 2>/dev/null
+          fi
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Выложить index.html
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER: ${{ secrets.DEPLOY_USER }}
+          DEST: ${{ secrets.DEPLOY_PATH }}
+          PORT: ${{ secrets.DEPLOY_PORT }}
+        run: |
+          set -euo pipefail
+          # без --delete: на сервере может лежать чужое содержимое
+          rsync -avz --checksum \
+            -e "ssh -i ~/.ssh/id_deploy -p ${PORT:-22} -o StrictHostKeyChecking=yes" \
+            index.html "$USER@$HOST:$DEST/index.html"
+
+      - name: Убрать ключ
+        if: always()
+        run: rm -f ~/.ssh/id_deploy

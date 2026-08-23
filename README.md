@@ -68,3 +68,19 @@
 awk '/^\/\/<ENGINE>$/,/^\/\/<\/ENGINE>$/' index.html > engine.js
 echo "module.exports = {compute, SCHEMES, phi};" >> engine.js
 ```
+
+## Публикация
+
+Страница статическая — один файл `index.html` без сборки, поэтому годится любой
+веб-сервер: положить файл в веб-корень и открыть.
+
+В репозитории заведены два способа автоматической выкладки при пуше в `main`:
+
+* `.github/workflows/pages.yml` — GitHub Pages, адрес вида
+  `https://<owner>.github.io/<repo>/`. Требуется один раз включить Pages
+  (Settings → Pages → Source: GitHub Actions).
+* `.github/workflows/deploy-server.yml` — rsync по SSH на собственный сервер.
+  Включается переменной `DEPLOY_ENABLED=true` и секретами `DEPLOY_HOST`,
+  `DEPLOY_USER`, `DEPLOY_PATH`, `DEPLOY_SSH_KEY` (плюс необязательные
+  `DEPLOY_PORT`, `DEPLOY_KNOWN_HOSTS`) в Settings → Secrets and variables → Actions.
+  Ключ задавайте отдельный, только для деплоя.
