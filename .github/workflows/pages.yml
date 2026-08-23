@@ -1,6 +1,13 @@
-# Публикация калькулятора на GitHub Pages.
-# Включение: Settings → Pages → Source: GitHub Actions (или сработает автоматически
-# на первом запуске — configure-pages включит Pages, если у токена есть права).
+# Публикация калькулятора на GitHub Pages — запасной вариант к выкладке на свой
+# сервер (.github/workflows/deploy-server.yml).
+#
+# Включение, оба шага обязательны:
+#   1. Settings → Pages → Source: GitHub Actions
+#      (GITHUB_TOKEN включить Pages сам не может — «Resource not accessible by
+#      integration», поэтому галка ставится руками)
+#   2. Settings → Secrets and variables → Actions → Variables: PAGES_ENABLED = true
+#
+# Пока переменная не выставлена, задание пропускается и не красит историю.
 name: GitHub Pages
 
 on:
@@ -20,6 +27,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: vars.PAGES_ENABLED == 'true'
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -33,8 +41,6 @@ jobs:
           cp index.html _site/index.html
 
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:

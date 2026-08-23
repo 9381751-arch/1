@@ -113,5 +113,7 @@ rsync запускается **без** `--delete`, чтобы не тронут
 ### Альтернатива: GitHub Pages
 
 `.github/workflows/pages.yml` публикует ту же страницу на
-`https://<owner>.github.io/<repo>/`. Требуется один раз включить Pages
-(Settings → Pages → Source: GitHub Actions).
+`https://<owner>.github.io/<repo>/`. Включается двумя действиями:
+Settings → Pages → Source: GitHub Actions, и переменная `PAGES_ENABLED=true`
+в Settings → Secrets and variables → Actions. Без переменной задание
+пропускается — учтите, что Pages делает страницу публичной.
