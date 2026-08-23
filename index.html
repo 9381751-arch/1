@@ -1,0 +1,1622 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Каркас 1.0 — расчёт рамы, фермы и балки</title>
+<meta name="description" content="Подбор сортамента стального каркаса здания: рама, ферма, балка, прогоны, связи. Нагрузки по СПб.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=PT+Sans+Narrow:wght@400;700&display=swap">
+<style>
+title{display:none}
+*,*::before,*::after{box-sizing:border-box}
+
+:root{
+  /* светлая тема — холодная калька и грунтованный металл */
+  --paper:#E6E9ED;
+  --surface:#F7F8FA;
+  --surface-2:#EEF1F4;
+  --sunken:#DDE2E8;
+  --line:#C7CED6;
+  --line-2:#A7B1BC;
+  --ink:#11161C;
+  --ink-2:#3C4652;
+  --muted:#69747F;
+  --accent:#A93F24;      /* сурик, грунт ГФ-021 */
+  --accent-soft:#f0dcd4;
+  --blue:#255076;        /* чертёжный синий: оси и размеры */
+  --blue-soft:#d7e2ec;
+  --ok:#26704D;
+  --warn:#8C6110;
+  --shadow:0 1px 2px rgba(17,22,28,.06), 0 8px 24px -12px rgba(17,22,28,.25);
+  --r:3px;
+
+  --f-display:"PT Sans Narrow","Arial Narrow",system-ui,sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0D1116;
+    --surface:#141A20;
+    --surface-2:#1A2128;
+    --sunken:#0A0E12;
+    --line:#28313A;
+    --line-2:#3E4A57;
+    --ink:#E4EAF0;
+    --ink-2:#B5C0CB;
+    --muted:#87939F;
+    --accent:#DE7044;
+    --accent-soft:#3a2016;
+    --blue:#78ADD8;
+    --blue-soft:#16283a;
+    --ok:#4FA87B;
+    --warn:#CFA03C;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -14px rgba(0,0,0,.8);
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0D1116;
+  --surface:#141A20;
+  --surface-2:#1A2128;
+  --sunken:#0A0E12;
+  --line:#28313A;
+  --line-2:#3E4A57;
+  --ink:#E4EAF0;
+  --ink-2:#B5C0CB;
+  --muted:#87939F;
+  --accent:#DE7044;
+  --accent-soft:#3a2016;
+  --blue:#78ADD8;
+  --blue-soft:#16283a;
+  --ok:#4FA87B;
+  --warn:#CFA03C;
+  --shadow:0 1px 2px rgba(0,0,0,.4), 0 10px 28px -14px rgba(0,0,0,.8);
+}
+
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:15px;
+  line-height:1.5;
+}
+h1,h2,h3{margin:0;text-wrap:balance;font-weight:600}
+p{margin:0}
+button,input,select{font:inherit;color:inherit}
+
+/* ---------- шапка ---------- */
+.top{
+  display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;
+  padding:14px 20px;
+  border-bottom:1px solid var(--line);
+  background:var(--surface);
+}
+.mark{
+  font-family:var(--f-display);font-weight:700;font-size:22px;letter-spacing:.06em;
+  text-transform:uppercase;line-height:1;
+}
+.mark span{color:var(--accent)}
+.top .sub{color:var(--muted);font-size:13px;flex:1;min-width:220px}
+.top .norm{
+  font-family:var(--f-mono);font-size:11px;color:var(--muted);
+  border:1px solid var(--line);border-radius:var(--r);padding:3px 8px;white-space:nowrap;
+}
+
+/* ---------- сетка ---------- */
+.app{display:grid;grid-template-columns:minmax(300px,340px) minmax(0,1fr);align-items:start}
+@media (max-width:900px){.app{grid-template-columns:1fr}}
+
+.rail{
+  border-right:1px solid var(--line);
+  background:var(--surface);
+  position:sticky;top:0;max-height:100vh;overflow-y:auto;
+  padding-bottom:28px;
+}
+@media (max-width:900px){.rail{position:static;max-height:none;border-right:0;border-bottom:1px solid var(--line)}}
+
+.grp{border-bottom:1px solid var(--line);padding:14px 18px 16px}
+.grp>.gt{
+  font-family:var(--f-display);text-transform:uppercase;letter-spacing:.14em;
+  font-size:12px;font-weight:700;color:var(--muted);
+  display:flex;align-items:center;gap:8px;margin-bottom:12px;
+}
+.grp>.gt::before{
+  content:attr(data-n);
+  font-family:var(--f-mono);font-size:10px;letter-spacing:0;
+  color:var(--accent);border:1px solid currentColor;border-radius:2px;
+  width:17px;height:17px;display:grid;place-items:center;flex:none;
+}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.f{display:flex;flex-direction:column;gap:5px;margin-bottom:10px}
+.f:last-child{margin-bottom:0}
+.f>label{font-size:12px;color:var(--ink-2);letter-spacing:.01em}
+.f>label .u{color:var(--muted);font-family:var(--f-mono);font-size:11px}
+input[type=number],select{
+  width:100%;padding:7px 9px;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:var(--r);
+  font-family:var(--f-mono);font-size:13px;
+  font-variant-numeric:tabular-nums;
+}
+select{font-family:var(--f-body);font-size:13px}
+input:focus-visible,select:focus-visible,button:focus-visible{
+  outline:2px solid var(--accent);outline-offset:1px;
+}
+.chk{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--ink-2);cursor:pointer}
+.chk input{margin:3px 0 0;accent-color:var(--accent);flex:none}
+.hint{font-size:11.5px;color:var(--muted);line-height:1.4}
+
+/* сегментированный переключатель */
+.seg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden;background:var(--surface-2)}
+.seg button{
+  flex:1;padding:7px 4px;background:none;border:0;cursor:pointer;
+  font-family:var(--f-display);text-transform:uppercase;letter-spacing:.08em;
+  font-size:12px;font-weight:700;color:var(--muted);border-right:1px solid var(--line);
+}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+.seg.sm button{font-size:11px;padding:5px 4px}
+
+/* ---------- основная колонка ---------- */
+.main{padding:18px 20px 60px;min-width:0;display:flex;flex-direction:column;gap:16px}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:var(--r)}
+.stat{background:var(--surface);padding:12px 14px;display:flex;flex-direction:column;gap:3px}
+.stat .k{font-size:11px;text-transform:uppercase;letter-spacing:.1em;color:var(--muted);font-family:var(--f-display);font-weight:700}
+.stat .v.long{font-size:15px;line-height:1.3}
+.stat .v{font-family:var(--f-mono);font-size:23px;font-weight:500;font-variant-numeric:tabular-nums;line-height:1.15}
+.stat .v small{font-size:12px;color:var(--muted);font-weight:400}
+.stat.hero .v{color:var(--accent)}
+
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.card>.ch{
+  display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+  padding:10px 14px;border-bottom:1px solid var(--line);
+}
+.card>.ch h2{
+  font-family:var(--f-display);text-transform:uppercase;letter-spacing:.12em;
+  font-size:13px;font-weight:700;
+}
+.card>.ch .sp{flex:1}
+.cb{padding:14px}
+
+.scheme-bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 14px;background:var(--surface-2);border:1px solid var(--line);border-radius:var(--r)}
+.scheme-bar .lab{font-family:var(--f-display);text-transform:uppercase;letter-spacing:.12em;font-size:12px;font-weight:700;color:var(--muted)}
+.scheme-bar .seg{flex:1;min-width:260px;max-width:460px;background:var(--surface)}
+.scheme-bar .note{font-size:12px;color:var(--muted);flex-basis:100%}
+
+.dwg{overflow-x:auto;background:var(--sunken);border-radius:2px;padding:6px}
+.dwg svg{display:block;min-width:640px;width:100%;height:auto}
+
+/* таблица сортамента */
+.tw{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px;min-width:640px}
+th,td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--line);white-space:nowrap}
+th{
+  font-family:var(--f-display);text-transform:uppercase;letter-spacing:.08em;font-size:11px;
+  color:var(--muted);font-weight:700;border-bottom:1px solid var(--line-2);
+  position:sticky;top:0;background:var(--surface);
+}
+td:first-child,th:first-child{text-align:left;white-space:normal;min-width:180px}
+td:nth-child(2),th:nth-child(2){text-align:left}
+td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+tr.sec td{
+  background:var(--surface-2);font-family:var(--f-display);text-transform:uppercase;
+  letter-spacing:.1em;font-size:11px;font-weight:700;color:var(--ink-2);
+}
+tr.tot td{border-top:1px solid var(--line-2);border-bottom:0;font-weight:600}
+tr.tot td.num{font-size:15px}
+.pos{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+
+/* использование сечения */
+.util{display:inline-flex;align-items:center;gap:6px;justify-content:flex-end}
+.util .bar{width:44px;height:6px;background:var(--sunken);border:1px solid var(--line);border-radius:1px;overflow:hidden;flex:none}
+.util .bar i{display:block;height:100%;background:var(--ok)}
+.util.w .bar i{background:var(--warn)}
+.util.c .bar i{background:var(--accent)}
+.util .n{font-family:var(--f-mono);font-size:12px;font-variant-numeric:tabular-nums;color:var(--ink-2);min-width:34px}
+
+/* нагрузки / проверки */
+.kv{display:grid;grid-template-columns:1fr auto;gap:2px 14px;font-size:13px}
+.kv .k{color:var(--ink-2);min-width:0}
+.kv .v{font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.kv .hr{grid-column:1/-1;height:1px;background:var(--line);margin:6px 0}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:22px}
+
+.chk-list{display:flex;flex-direction:column;gap:7px;font-size:13px}
+.chk-list .it{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:baseline}
+.chk-list .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);transform:translateY(-1px)}
+.chk-list .dot.w{background:var(--warn)}
+.chk-list .dot.c{background:var(--accent)}
+.chk-list .val{font-family:var(--f-mono);font-size:12px;font-variant-numeric:tabular-nums;color:var(--muted)}
+
+.warns{display:flex;flex-direction:column;gap:8px}
+.wn{display:flex;gap:9px;font-size:13px;padding:9px 11px;border-radius:var(--r);border:1px solid var(--line);background:var(--surface-2);line-height:1.45}
+.wn.c{border-color:var(--accent);background:var(--accent-soft)}
+.wn b{font-weight:600}
+.wn .ic{font-family:var(--f-display);font-weight:700;color:var(--accent);flex:none}
+
+.btn{
+  padding:6px 12px;background:var(--surface-2);border:1px solid var(--line);
+  border-radius:var(--r);cursor:pointer;font-size:12.5px;
+}
+.btn:hover{border-color:var(--line-2)}
+
+footer.legal{color:var(--muted);font-size:12px;line-height:1.55;max-width:70ch}
+footer.legal b{color:var(--ink-2);font-weight:600}
+
+@media print{
+  .rail,.top .norm,.btn{display:none}
+  body{background:#fff;color:#000}
+  .app{grid-template-columns:1fr}
+  .card{break-inside:avoid;box-shadow:none}
+  .dwg{background:#fff}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="mark">Каркас<span>·</span>КМ</div>
+  <div class="sub">Экспресс-подбор сечений стального каркаса: рама, ферма, балка, прогоны, связи. Нагрузки по умолчанию — Санкт-Петербург.</div>
+  <div class="norm">СП 16.13330 · СП 20.13330 · ГОСТ 26020 · ГОСТ 30245</div>
+  <button class="btn" id="themeBtn" type="button" title="Переключить тему">Тема</button>
+</header>
+
+<div class="app">
+<!-- ============ ПАНЕЛЬ ВВОДА ============ -->
+<aside class="rail" id="rail">
+
+  <section class="grp">
+    <div class="gt" data-n="01">Габариты</div>
+    <div class="row">
+      <div class="f">
+        <label for="L">Пролёт <span class="u">м</span></label>
+        <input type="number" id="L" value="24" min="6" max="42" step="0.5">
+      </div>
+      <div class="f">
+        <label for="nspans">Пролётов</label>
+        <select id="nspans">
+          <option value="1" selected>1 (однопролётное)</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="f">
+        <label for="B">Шаг колонн <span class="u">м</span></label>
+        <input type="number" id="B" value="6" min="3" max="12" step="0.5">
+      </div>
+      <div class="f">
+        <label for="Ltot">Длина здания <span class="u">м</span></label>
+        <input type="number" id="Ltot" value="60" min="6" max="300" step="1">
+      </div>
+    </div>
+    <div class="f">
+      <label for="H">Высота до низа ригеля <span class="u">м</span></label>
+      <input type="number" id="H" value="8" min="3" max="20" step="0.1">
+    </div>
+    <p class="hint" id="gabHint"></p>
+  </section>
+
+  <section class="grp">
+    <div class="gt" data-n="02">Кровля и ригель</div>
+    <div class="f">
+      <label for="roof">Форма кровли</label>
+      <select id="roof">
+        <option value="gable" selected>Двускатная</option>
+        <option value="mono">Односкатная</option>
+        <option value="flat">Плоская (малоуклонная)</option>
+      </select>
+    </div>
+    <div class="f">
+      <label for="slope">Уклон <span class="u">%</span></label>
+      <input type="number" id="slope" value="10" min="1.5" max="60" step="0.5">
+    </div>
+    <div class="f">
+      <label for="rigel">Тип ригеля</label>
+      <select id="rigel">
+        <option value="beam" selected>Балка сплошностенчатая (двутавр)</option>
+        <option value="truss">Ферма</option>
+      </select>
+    </div>
+    <p class="hint" id="rigelHint"></p>
+  </section>
+
+  <section class="grp">
+    <div class="gt" data-n="03">Ограждающие конструкции</div>
+    <div class="f">
+      <label for="roofMat">Кровля</label>
+      <select id="roofMat">
+        <option value="sandwich" selected>Сэндвич-панель</option>
+        <option value="prof">Профлист</option>
+      </select>
+    </div>
+    <div class="row" id="roofSandwich">
+      <div class="f">
+        <label for="roofCore">Утеплитель</label>
+        <select id="roofCore">
+          <option value="pir" selected>PIR</option>
+          <option value="pur">PUR / PPU</option>
+          <option value="mw">Минвата</option>
+        </select>
+      </div>
+      <div class="f">
+        <label for="roofT">Толщина <span class="u">мм</span></label>
+        <select id="roofT"></select>
+      </div>
+    </div>
+    <div class="f" id="roofProfWrap" hidden>
+      <label for="roofProf">Профиль настила</label>
+      <select id="roofProf">
+        <option value="H60">Н60-845-0,7 (несущий)</option>
+        <option value="H75">Н75-750-0,8 (несущий)</option>
+        <option value="H114">Н114-600-0,9 (несущий)</option>
+      </select>
+    </div>
+    <label class="chk" id="roofInsWrap" hidden><input type="checkbox" id="roofIns"> Утеплитель по настилу (минвата 150 мм + мембрана)</label>
+
+    <div class="f" style="margin-top:12px">
+      <label for="wallMat">Стены</label>
+      <select id="wallMat">
+        <option value="sandwich" selected>Сэндвич-панель</option>
+        <option value="prof">Профлист</option>
+      </select>
+    </div>
+    <div class="row" id="wallSandwich">
+      <div class="f">
+        <label for="wallCore">Утеплитель</label>
+        <select id="wallCore">
+          <option value="pir">PIR</option>
+          <option value="pur">PUR / PPU</option>
+          <option value="mw" selected>Минвата</option>
+        </select>
+      </div>
+      <div class="f">
+        <label for="wallT">Толщина <span class="u">мм</span></label>
+        <select id="wallT"></select>
+      </div>
+    </div>
+    <div class="f" id="wallProfWrap" hidden>
+      <label for="wallProf">Профиль стенового</label>
+      <select id="wallProf">
+        <option value="C21">С21-1000-0,7</option>
+        <option value="C44">С44-1000-0,7</option>
+      </select>
+    </div>
+    <label class="chk" style="margin-top:10px"><input type="checkbox" id="purlins" checked> Кровля по прогонам</label>
+    <p class="hint" style="margin-top:4px">Снимите галку, если панель укладывается пролётом на рамы — прогоны из ведомости исчезнут.</p>
+  </section>
+
+  <section class="grp">
+    <div class="gt" data-n="04">Крановое оборудование</div>
+    <div class="f">
+      <label for="crane">Кран</label>
+      <select id="crane">
+        <option value="none" selected>Нет</option>
+        <option value="susp">Подвесная кран-балка (по ригелю)</option>
+        <option value="over">Опорный мостовой (подкрановые балки)</option>
+      </select>
+    </div>
+    <div class="f" id="craneQWrap" hidden>
+      <label for="craneQ">Грузоподъёмность <span class="u">т</span></label>
+      <select id="craneQ"></select>
+    </div>
+    <p class="hint" id="craneHint"></p>
+  </section>
+
+  <section class="grp">
+    <div class="gt" data-n="05">Нагрузки и материал</div>
+    <div class="row">
+      <div class="f">
+        <label for="snowReg">Снеговой район</label>
+        <select id="snowReg">
+          <option value="1">I — 0,5 кПа</option>
+          <option value="2">II — 1,0 кПа</option>
+          <option value="3" selected>III — 1,5 кПа (СПб)</option>
+          <option value="4">IV — 2,0 кПа</option>
+          <option value="5">V — 2,5 кПа</option>
+        </select>
+      </div>
+      <div class="f">
+        <label for="windReg">Ветровой район</label>
+        <select id="windReg">
+          <option value="1a">Iа — 0,17 кПа</option>
+          <option value="1">I — 0,23 кПа</option>
+          <option value="2" selected>II — 0,30 кПа (СПб)</option>
+          <option value="3">III — 0,38 кПа</option>
+          <option value="4">IV — 0,48 кПа</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="f">
+        <label for="terrain">Тип местности</label>
+        <select id="terrain">
+          <option value="A">A — открытая</option>
+          <option value="B" selected>B — застройка</option>
+          <option value="C">C — плотная застройка</option>
+        </select>
+      </div>
+      <div class="f">
+        <label for="ce">Коэф. сноса c<sub>e</sub></label>
+        <select id="ce">
+          <option value="1">1,0 — без сноса</option>
+          <option value="0.85">0,85 — со сносом</option>
+        </select>
+      </div>
+    </div>
+    <label class="chk"><input type="checkbox" id="snowVar" checked> Учитывать неравномерный снег (вариант 2 по СП 20)</label>
+    <div class="row" style="margin-top:10px">
+      <div class="f">
+        <label for="steel">Сталь</label>
+        <select id="steel">
+          <option value="C245" selected>С245 · R<sub>y</sub>=240 МПа</option>
+          <option value="C255">С255 · 250 МПа</option>
+          <option value="C345">С345 · 320 МПа</option>
+          <option value="C355">С355 · 345 МПа</option>
+        </select>
+      </div>
+      <div class="f">
+        <label for="gn">Уровень ответств.</label>
+        <select id="gn">
+          <option value="0.95">КС-1 · γ=0,95</option>
+          <option value="1" selected>КС-2 · γ=1,0</option>
+          <option value="1.1">КС-3 · γ=1,1</option>
+        </select>
+      </div>
+    </div>
+  </section>
+</aside>
+
+<!-- ============ РЕЗУЛЬТАТ ============ -->
+<main class="main">
+
+  <div class="scheme-bar">
+    <span class="lab">Схема</span>
+    <div class="seg" id="schemeSeg" role="group" aria-label="Схема подбора сечений">
+      <button type="button" data-s="min" aria-pressed="false">Минимальная</button>
+      <button type="button" data-s="opt" aria-pressed="true">Оптимальная</button>
+      <button type="button" data-s="max" aria-pressed="false">С запасом</button>
+    </div>
+    <p class="note" id="schemeNote"></p>
+  </div>
+
+  <div class="stats" id="stats"></div>
+
+  <section class="card">
+    <div class="ch">
+      <h2>Поперечная рама</h2>
+      <span class="sp"></span>
+      <span class="pos" id="frameCaption"></span>
+    </div>
+    <div class="cb"><div class="dwg" id="dwgFrame"></div></div>
+  </section>
+
+  <section class="card">
+    <div class="ch">
+      <h2>План осей и связей</h2>
+      <span class="sp"></span>
+      <span class="pos" id="planCaption"></span>
+    </div>
+    <div class="cb"><div class="dwg" id="dwgPlan"></div></div>
+  </section>
+
+  <section class="card">
+    <div class="ch">
+      <h2>Ведомость металла</h2>
+      <span class="sp"></span>
+      <button class="btn" type="button" id="printBtn">Печать / PDF</button>
+    </div>
+    <div class="cb"><div class="tw"><table id="bom"></table></div></div>
+  </section>
+
+  <section class="card">
+    <div class="ch"><h2>Нагрузки и проверки</h2></div>
+    <div class="cb two">
+      <div>
+        <div class="kv" id="loads"></div>
+      </div>
+      <div>
+        <div class="chk-list" id="checks"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="warns" id="warns"></div>
+
+  <footer class="legal">
+    <b>Область применения.</b> Расчёт предварительный, для оценки тоннажа и компоновки на стадии КМ/ТКП.
+    Сечения подобраны по прочности, общей устойчивости и прогибам для основного сочетания нагрузок;
+    не выполнены проверки местной устойчивости стенки и полок, узлов и баз, монтажных стыков, температурных блоков,
+    прогрессирующего обрушения и расчёта на пульсационную составляющую ветра.
+    Перед выпуском КМ результат обязан быть проверен расчётом в ПК (SCAD / Лира / IDEA) и живым конструктором.
+  </footer>
+</main>
+</div>
+
+<script>
+"use strict";
+/* ==================================================================
+   РАСЧЁТНОЕ ЯДРО
+   ================================================================== */
+//<ENGINE>
+const EMOD = 20600;               // модуль упругости стали, кН/см2
+const RHO  = 7850;                // плотность стали, кг/м3
+
+/* Разбор компактных таблиц сортамента */
+function rows(txt, keys){
+  return txt.trim().split("\n").map(function(line){
+    var p = line.trim().split(/\s+/), o = {};
+    keys.forEach(function(k,i){ o[k] = (i===0) ? p[i] : parseFloat(p[i]); });
+    return o;
+  });
+}
+const KI = ["name","m","A","Ix","Wx","ix","Iy","Wy","iy","h","b"];
+
+/* Двутавры нормальные, ГОСТ 26020-83 (Б) */
+const IB = rows(`
+14Б1  10.5  13.39    435    62.3   5.70     45    11.5  1.83  137   73
+16Б1  12.7  16.18    689    86.1   6.53     71    14.5  2.09  157   82
+18Б1  15.4  19.58   1063   121.0   7.37    121    19.9  2.49  177   91
+20Б1  22.4  28.49   1943   194.0   8.26    134    26.8  2.17  200  100
+23Б1  25.8  32.91   3048   265.0   9.62    178    32.4  2.33  230  110
+26Б1  28.0  35.62   4024   312.0  10.63    245    41.0  2.62  258  120
+30Б1  32.9  41.92   6328   425.0  12.29    442    59.3  3.25  296  140
+35Б1  38.9  49.53  10060   582.0  14.25    525    67.7  3.26  346  155
+40Б1  48.1  61.25  15750   804.0  16.03    794    96.2  3.60  392  165
+45Б1  59.8  76.23  24940  1126.0  18.09   1159   129.0  3.90  443  180
+50Б1  73.0  92.98  37160  1511.0  19.99   1606   161.0  4.16  492  200
+55Б1  89.0 113.37  55680  2051.0  22.16   2404   219.0  4.61  543  220
+60Б1 106.2 135.26  78760  2656.0  24.13   3154   274.0  4.83  593  230
+70Б1 129.3 164.70 125930  3645.0  27.65   4634   357.0  5.30  691  260
+80Б1 159.5 203.20 199500  5044.0  31.33   6375   455.0  5.60  791  280
+90Б1 194.0 247.10 304400  6818.0  35.10   8595   573.0  5.90  893  300
+100Б1 230.6 293.80 446000 9011.0  38.96  11520   720.0  6.26  990  320
+`, KI);
+
+/* Двутавры колонные, ГОСТ 26020-83 (Ш) */
+const IK = rows(`
+20Ш1  30.6  38.95   2660   276.0   8.26    902   120.0  4.81  193  150
+25Ш1  42.2  53.80   6146   490.0  10.69   2224   222.0  6.43  248  180
+30Ш1  53.6  68.31  10400   715.0  12.34   2671   267.0  6.25  291  200
+35Ш1  75.0  95.50  19790  1171.0  14.40   5211   417.0  7.39  338  250
+40Ш1  96.1 122.40  34970  1803.0  16.90   9019   601.0  8.58  388  300
+50Ш1 114.4 145.70  60930  2518.0  20.45  11360   757.0  8.83  484  300
+60Ш1 142.2 181.10 107700  3714.0  24.39  15490   968.0  9.25  580  320
+70Ш1 161.6 205.90 163400  4785.0  28.17  17490  1093.0  9.22  683  320
+`, KI);
+
+/* Гнутосварной квадрат, ГОСТ 30245-2003 */
+const SHS = rows(`
+60x60x4     6.71   8.55    43.6   14.5  2.26   60
+80x80x4     9.22  11.75   111.0   27.8  3.07   80
+80x80x5    11.30  14.40   133.0   33.2  3.04   80
+100x100x5  14.40  18.36   269.0   53.8  3.83  100
+100x100x6  17.00  21.60   309.0   61.8  3.78  100
+120x120x6  20.70  26.40   549.0   91.5  4.56  120
+120x120x8  26.80  34.20   682.0  114.0  4.47  120
+140x140x6  24.50  31.20   900.0  129.0  5.37  140
+140x140x8  32.00  40.70  1140.0  163.0  5.29  140
+150x150x8  34.50  43.90  1430.0  191.0  5.71  150
+160x160x8  37.00  47.10  1760.0  220.0  6.11  160
+180x180x8  42.00  53.50  2540.0  282.0  6.89  180
+180x180x10 51.60  65.80  3040.0  338.0  6.80  180
+200x200x8  47.10  60.00  3550.0  355.0  7.69  200
+200x200x10 58.10  74.00  4300.0  430.0  7.62  200
+250x250x10 73.80  94.00  8630.0  690.0  9.58  250
+`, ["name","m","A","I","W","i","h"]);
+
+/* Трубы электросварные для решётки, ГОСТ 10704-91 */
+const CHS = rows(`
+57x3.5    4.62   5.88    21.6  1.92   57
+76x3.5    6.26   7.97    52.6  2.57   76
+89x4      8.38  10.68    96.3  3.00   89
+102x4     9.67  12.32   147.0  3.46  102
+114x4.5  12.15  15.48   234.0  3.89  114
+127x5    15.04  19.16   359.0  4.33  127
+152x5    18.13  23.09   629.0  5.22  152
+168x6    23.97  30.54  1002.0  5.73  168
+`, ["name","m","A","I","i","d"]);
+
+/* Тавры для ферм «Молодечно» — разрезка колонных двутавров пополам */
+const TEE = IK.map(function(p){
+  return { name:p.name.replace("Ш","ШТ"), m:p.m/2, A:p.A/2,
+           i:Math.min(p.iy, 0.028*p.h/2), iy:p.iy, h:p.h/2, W:p.Wx/4 };
+});
+
+/* Z-прогоны ЛСТК (оцинкованные, неразрезные с нахлёстом) */
+const ZP = rows(`
+Z150x1.5   3.60   15.8   118   150
+Z200x1.5   4.40   25.4   254   200
+Z200x2.0   5.90   33.5   335   200
+Z250x2.0   7.30   50.2   628   250
+Z250x2.5   9.00   62.0   775   250
+Z300x2.5  10.60   90.0  1350   300
+Z300x3.0  12.70  107.0  1600   300
+Z350x3.0  14.50  140.0  2450   350
+`, ["name","m","W","I","h"]);
+
+/* Швеллеры — резерв для тяжёлых прогонов и фахверка */
+const CH = rows(`
+14П  12.3  15.6   491   70.2   5.60  140
+16П  14.2  18.1   747   93.4   6.42  160
+18П  16.3  20.7  1090  121.0   7.24  180
+20П  18.4  23.4  1520  152.0   8.07  200
+24П  24.0  30.6  2900  242.0   9.73  240
+30П  31.8  40.5  5810  387.0  11.90  300
+`, ["name","m","A","I","W","i","h"]);
+
+/* Расчётные сопротивления Ry, кН/см2 (прокат до 20 мм / свыше 20 мм) */
+const STEEL = {
+  C245:{ry:24.0,ry2:23.0,name:"С245"},
+  C255:{ry:25.0,ry2:24.0,name:"С255"},
+  C345:{ry:32.0,ry2:30.0,name:"С345"},
+  C355:{ry:34.5,ry2:32.5,name:"С355"}
+};
+
+/* Снеговые и ветровые районы, кПа */
+const SNOW = {1:0.5, 2:1.0, 3:1.5, 4:2.0, 5:2.5};
+const WIND = {"1a":0.17, "1":0.23, "2":0.30, "3":0.38, "4":0.48};
+
+/* Предельный прогиб элементов покрытия 1/x, СП 20.13330 табл. Д.1 */
+const FLIM = [[1,120],[3,150],[6,200],[12,250],[24,300],[36,350],[48,400]];
+
+/* Коэффициент k(ze) по типам местности, СП 20.13330 табл. 11.2 */
+const KZ = { A:[[5,0.75],[10,1.0],[20,1.25],[40,1.5],[60,1.7],[100,1.85]],
+             B:[[5,0.50],[10,0.65],[20,0.85],[40,1.1],[60,1.25],[100,1.4]],
+             C:[[5,0.40],[10,0.40],[20,0.55],[40,0.8],[60,0.95],[100,1.1]] };
+
+/* Ограждающие конструкции — нормативный вес, кг/м2 */
+const CORE_RHO = { pir:40, pur:40, mw:110 };           // плотность утеплителя, кг/м3
+const PANEL_T  = [50,60,80,100,120,150,200,250];       // толщины сэндвич-панели, мм
+const PROF = {
+  H60 :{m:9.3,  span:3.0, label:"Н60-845-0,7"},
+  H75 :{m:11.7, span:4.5, label:"Н75-750-0,8"},
+  H114:{m:14.5, span:6.0, label:"Н114-600-0,9"},
+  C21 :{m:7.4,  span:2.5, label:"С21-1000-0,7"},
+  C44 :{m:8.6,  span:3.5, label:"С44-1000-0,7"}
+};
+/* Предельный пролёт сэндвич-панели (двухпролётная схема), м */
+function panelSpan(t){ return t<=60?3.0 : t<=80?3.5 : t<=100?4.2 : t<=120?4.8 : t<=150?5.5 : 6.0; }
+
+/* Крановое оборудование: Fmax на колесо (кН), база (м), высота крана (м) */
+const CRANE = {
+  susp:{ 1:{F:12,b:1.4,hk:0.6}, 2:{F:18,b:1.4,hk:0.7}, 3.2:{F:26,b:1.8,hk:0.8}, 5:{F:38,b:2.0,hk:0.9} },
+  over:{ 5:{F:60,b:3.2,hk:1.5}, 10:{F:100,b:3.2,hk:1.7}, 16:{F:145,b:4.4,hk:2.0},
+         20:{F:175,b:4.4,hk:2.2}, 32:{F:265,b:5.0,hk:2.6} }
+};
+const RAIL = { 5:{n:"КР70 / Р43", m:44.6}, 10:{n:"КР70", m:52.8}, 16:{n:"КР70", m:52.8},
+               20:{n:"КР80", m:64.2}, 32:{n:"КР100", m:89.0} };
+
+/* Параметры схем подбора */
+const SCHEMES = {
+  min:{ label:"минимальная", util:0.98, c1:1.05, ties:0.04, joints:0.08, purlStep:1.00, lam:120,
+        note:"Максимальное использование сечений (до 98 %), учтён частичный пластический ресурс балок. Экономия металла ценой нулевого резерва: любое изменение нагрузок, снегового мешка или подвесного оборудования потребует пересчёта." },
+  opt:{ label:"оптимальная", util:0.85, c1:1.00, ties:0.05, joints:0.10, purlStep:0.92, lam:110,
+        note:"Рабочая схема для КМ: использование сечений 85 %, упругая работа, резерв на узлы, подвески и уточнение нагрузок. Рекомендуется как база для проектирования." },
+  max:{ label:"с запасом",   util:0.70, c1:1.00, ties:0.06, joints:0.12, purlStep:0.80, lam:100,
+        note:"Схема с запасом 30 %: под будущее подвесное оборудование, увеличение снеговой нагрузки, зашивку доп. этажа или неопределённость по грунтам и монтажу." }
+};
+
+/* ---------- вспомогательные ---------- */
+function interp(tbl, x){
+  if (x <= tbl[0][0]) return tbl[0][1];
+  for (var i=1;i<tbl.length;i++){
+    if (x <= tbl[i][0]){
+      var a=tbl[i-1], b=tbl[i];
+      return a[1] + (b[1]-a[1])*(x-a[0])/(b[0]-a[0]);
+    }
+  }
+  return tbl[tbl.length-1][1];
+}
+/* Коэффициент продольного изгиба φ, СП 16.13330 п.7.1.3 (тип сечения b) */
+function phi(lam, ry){
+  var lb = lam*Math.sqrt(ry/EMOD);
+  if (lb <= 0.4) return 1;
+  var al=0.04, be=0.09;
+  var d = 9.87*(1-al+be*lb) + lb*lb;
+  var v = d*d - 39.48*lb*lb;
+  var f = (d - Math.sqrt(Math.max(v,0)))/(2*lb*lb);
+  if (lb > 3.8) f = Math.min(f, 7.6/(lb*lb));
+  return Math.max(0.02, Math.min(1, f));
+}
+function ryOf(steel, t){ var s = STEEL[steel]; return t>20 ? s.ry2 : s.ry; }
+
+/* Выбор самого лёгкого профиля, проходящего проверку check() c запасом схемы.
+   check(profile) -> число: использование сечения (>1 — не проходит) или null */
+function pick(list, check, util){
+  var best=null, sorted=list.slice().sort(function(a,b){return a.m-b.m;});
+  for (var i=0;i<sorted.length;i++){
+    var u = check(sorted[i]);
+    if (u !== null && u <= util){ return {p:sorted[i], u:u}; }
+    if (u !== null && (best===null || u < best.u)) best = {p:sorted[i], u:u};
+  }
+  /* ни один профиль не проходит с заданным запасом — берём предельный */
+  var last = sorted[sorted.length-1], lu = check(last);
+  if (best && best.u <= 1) return {p:best.p, u:best.u, tight:true};
+  return {p:last, u:(lu===null?99:lu), over:true};
+}
+
+/* ==================================================================
+   ОСНОВНОЙ РАСЧЁТ
+   ================================================================== */
+function compute(inp){
+  var S = SCHEMES[inp.scheme];
+  var gn = inp.gn, gc = 1.0;
+  var ry = ryOf(inp.steel, 12), ryT = ryOf(inp.steel, 24);   // тонкий / толстый прокат
+  var W = [];                                                // предупреждения
+  var G = 9.81/1000;                                         // кг/м2 -> кН/м2
+
+  /* ---------- геометрия ---------- */
+  var L = inp.L, ns = inp.nspans, H = inp.H;
+  var nSteps = Math.max(1, Math.round(inp.Ltot/inp.B));
+  var B = inp.Ltot/nSteps;                                   // фактический шаг рам
+  var nFrames = nSteps+1;
+  var width = L*ns, Ltot = inp.Ltot, area = width*Ltot;
+  var slope = inp.roof==="flat" ? Math.min(inp.slope,5) : inp.slope;
+  var alpha = Math.atan(slope/100), aDeg = alpha*180/Math.PI;
+  var rise = (inp.roof==="mono" ? L*ns : L/2)*slope/100;
+  var zTop = H + rise + 1.2;
+
+  /* ---------- ограждающие конструкции ---------- */
+  function clad(mat, core, t, prof, ins){
+    if (mat==="sandwich") return {kg:7.85 + t/1000*CORE_RHO[core],
+      span:panelSpan(t), name:"Сэндвич "+({pir:"PIR",pur:"PUR",mw:"минвата"}[core])+" "+t+" мм"};
+    var p = PROF[prof];
+    return {kg:p.m + (ins?17:0), span:p.span, name:p.label+(ins?" + утеплитель 150":"")};
+  }
+  var roofC = clad(inp.roofMat, inp.roofCore, inp.roofT, inp.roofProf, inp.roofIns);
+  var wallC = clad(inp.wallMat, inp.wallCore, inp.wallT, inp.wallProf, false);
+  var gRoof = roofC.kg*G;                                    // кН/м2 по скату
+  var gWall = wallC.kg*G;
+
+  /* ---------- снег и ветер ---------- */
+  var Sg = SNOW[inp.snowReg];
+  var mu = aDeg<=25 ? 1 : (aDeg>=60 ? 0 : (60-aDeg)/35);
+  var S0 = 0.7*inp.ce*mu*Sg;                                 // нормативная, кН/м2
+  var unbal = (inp.snowVar && inp.roof!=="flat" && aDeg>=5);
+  var kUnbSpan = unbal ? 1.06 : 1.0, kUnbCol = unbal ? 1.15 : 1.0;
+
+  var w0 = WIND[inp.windReg];
+  var kz = interp(KZ[inp.terrain], zTop);
+  var we = w0*kz;                                            // нормативное среднее давление
+  var qwN = we*1.3*B;                                        // кН/м на раму (0,8 + 0,5)
+  var qwD = qwN*1.4;
+  var wUplift = we*1.0*1.4;                                  // отсос с кровли, кН/м2
+
+  /* ---------- прогоны покрытия ---------- */
+  var slopeLen = width/Math.cos(alpha);
+  var purl = null, gPurl = 0, aP = 0, nPurlLines = 0;
+  if (inp.purlins){
+    aP = Math.min(roofC.span, 4.5)*S.purlStep;
+    if (aP > B) aP = B;
+    nPurlLines = Math.ceil(slopeLen/aP) + 1 + (inp.roof==="gable"?ns:0);
+    aP = slopeLen/(nPurlLines-1);                            // фактический шаг нитей
+    var qPd = (gRoof*1.2 + S0*1.4)*aP + 0.12;
+    var qPn = (gRoof + 0.5*S0)*aP;
+    var Bc = B*100;
+    var cand = ZP.concat(CH.map(function(c){return {name:c.name,m:c.m,W:c.W,I:c.I};}));
+    var res = pick(cand, function(p){
+      var Md = qPd*B*B/10*gn;                                // неразрезной прогон
+      var uS = Md*100/(p.W*ry*gc);
+      var f = (qPn/100)*Math.pow(Bc,4)/(185*EMOD*p.I);
+      var uD = f/(Bc/200);
+      return Math.max(uS,uD);
+    }, S.util);
+    purl = res;
+    gPurl = (nPurlLines*purl.p.m/slopeLen)*G;
+  }
+
+  /* ---------- сбор нагрузок на раму ---------- */
+  var gExtra = 0.08;                                          // связи, подвески, коммуникации
+  var gOwn = 0.25;                                            // собственный вес ригеля, 1-е приближение
+  var q_d, q_n, rig=null, col=null, truss=null, k4=0.8;
+
+  var craneS = null, craneO = null, Psusp = 0, aSusp = 0;
+  if (inp.crane==="susp"){
+    craneS = CRANE.susp[inp.craneQ];
+    var Lk = Math.max(4, Math.round((L-3)*10)/10);            // пролёт кран-балки
+    aSusp = (L-Lk)/2;
+    Psusp = 1.6*craneS.F*1.1*1.1*gn;                          // реакция нитки пути на раму
+  }
+  if (inp.crane==="over"){
+    craneO = CRANE.over[inp.craneQ];
+  }
+
+  /* итерации по собственному весу ригеля */
+  for (var it=0; it<4; it++){
+    q_d = B*(gRoof*1.2 + gPurl*1.05 + gExtra*1.05 + gOwn*1.05 + S0*1.4);
+    q_n = B*(gRoof + gPurl + gExtra + gOwn + 0.5*S0);   // пониженное значение снега, СП 20 п.10.11
+
+    if (inp.rigel==="beam"){
+      /* рама с жёстким карнизным узлом и шарнирными базами */
+      var kSt = k4;
+      var Mcor = q_d*L*L/(4*(2*kSt+3));
+      var Mspn = q_d*L*L/8 - Mcor;
+      if (Psusp>0) Mspn += Psusp*aSusp;                       // подвесной кран
+      var Mdes = Math.max(Mspn*kUnbSpan, Mcor*kUnbCol)*gn;
+      var fl = L*100/interp(FLIM, L);
+      var Ireq = 0.75*5*(q_n/100)*Math.pow(L*100,4)/(384*EMOD*fl);
+      var r = pick(IB, function(p){
+        var uS = Mdes*100/(p.Wx*ry*gc*S.c1);
+        var uD = Ireq/p.Ix;
+        return Math.max(uS,uD);
+      }, S.util);
+      rig = r; rig.M = Mdes; rig.Mcor = Mcor*gn; rig.Mspn = Mspn*gn;
+      rig.f = 0.75*5*(q_n/100)*Math.pow(L*100,4)/(384*EMOD*rig.p.Ix);
+      rig.flim = fl;
+      gOwn = (rig.p.m/B)*G*1.15;                              // +15 % на рёбра и стык
+      k4 = Math.max(0.5, Math.min(4, (rig.p.Ix/L)/((col?col.p.Ix:10400)/H)));
+    } else {
+      /* ферма: пояса и решётка */
+      var molod = (inp.roof==="flat");
+      var h0 = molod ? Math.max(1.2, Math.round(L/12*20)/20)
+                     : Math.max(1.2, Math.round(L/16*20)/20);
+      var hMid = molod ? h0 : h0 + rise*0.5;
+      var npan = Math.max(4, Math.round(L/3/2)*2), d = L/npan;
+      var aRad = Math.atan(hMid/d);
+      var Mmax = q_d*L*L/8*kUnbSpan*gn;
+      var V0 = q_d*L/2*gn;
+      if (Psusp>0){ Mmax += Psusp*aSusp; V0 += Psusp; }
+      var Nch = Mmax/hMid;
+      var lefY = inp.purlins ? Math.max(aP, d) : d;
+
+      var poyasList = molod ? TEE : SHS;
+      var top = pick(poyasList, function(p){
+        var A=p.A, ix=(p.i||p.ix), iy=(p.iy||p.i);
+        var lam = Math.max(0.9*d*100/ix, lefY*100/iy);
+        if (lam>150) return null;
+        return Nch/(phi(lam,ry)*A*ry*gc);
+      }, S.util);
+      var bot = pick(poyasList, function(p){
+        var lam = Math.max(d*100/(p.i||p.ix), (L/3)*100/(p.iy||p.i));
+        if (lam>400) return null;
+        return Nch/(p.A*ry*gc);
+      }, S.util);
+      var dLen = Math.sqrt(d*d + hMid*hMid);
+      var reshList = molod ? CHS : SHS;
+      var Nd0 = V0/Math.sin(aRad);
+      var dia = pick(reshList, function(p){
+        var lam = 0.8*dLen*100/p.i; if (lam>150) return null;
+        return Nd0/(phi(lam,ry)*p.A*ry*gc);
+      }, S.util);
+      var dia2 = pick(reshList, function(p){
+        var lam = 0.8*dLen*100/p.i; if (lam>150) return null;
+        return (Nd0*0.45)/(phi(lam,ry)*p.A*ry*gc);
+      }, S.util);
+      var post = pick(reshList, function(p){
+        var lam = 0.9*hMid*100/p.i; if (lam>200) return null;
+        return (V0*0.35)/(phi(lam,ry)*p.A*ry*gc);
+      }, S.util);
+
+      var nDiag = npan, nPost = Math.floor(npan/2)+1;
+      var mass = (L/Math.cos(alpha))*top.p.m + L*bot.p.m
+               + 2*dLen*dia.p.m + (nDiag-2)*dLen*dia2.p.m + nPost*hMid*post.p.m;
+      mass *= 1.06;                                           // фасонки, накладки, опорные узлы
+      truss = {molod:molod, h0:h0, hMid:hMid, npan:npan, d:d, top:top, bot:bot,
+               dia:dia, dia2:dia2, post:post, N:Nch, V:V0, mass:mass,
+               nDiag:nDiag, nPost:nPost, dLen:dLen};
+      truss.f = 5*(q_n/100)*Math.pow(L*100,4)/(384*EMOD*(0.7*bot.p.A*Math.pow(hMid*100/2,2)*2));
+      truss.flim = L*100/interp(FLIM, L);
+      gOwn = (mass/L/B)*G;
+      k4 = 3;                                                 // ферма — практически жёсткий диск
+    }
+
+    /* ---------- колонна ---------- */
+    var tribCoef = (ns>1) ? 1.0 : 0.5;                        // крайняя / средняя
+    var Ncol = q_d*L*tribCoef + gWall*1.2*H*B;
+    var Mw = qwD*H*H/8;
+    var Mcol = (inp.rigel==="beam" ? (rig? rig.Mcor:0) : 0)*kUnbCol + 0.9*Mw;
+    var craneN = 0, craneM = 0;
+    if (craneO){
+      craneN = 1.8*craneO.F*1.1*1.1;
+      craneM = craneN*0.75 + 0.1*craneO.F*1.1*H*0.5;
+      Ncol += craneN; Mcol += craneM*0.9;
+    }
+    var muX = (inp.rigel==="beam") ? 2.0 : 0.7;
+    var Ncf = Ncol*gn, Mcf = Mcol*gn;
+    var colList = IK.concat(IB.filter(function(p){return p.m>20;}));
+    var cr = pick(colList, function(p){
+      var lamX = muX*H*100/p.ix, lamY = 0.5*H*100/p.iy;   // из плоскости — распорки в середине
+      var lam = Math.max(lamX, lamY);
+      if (lam > S.lam) return null;
+      var uN = Ncf/(phi(lam,ry)*p.A*ry*gc);
+      var uM = Mcf*100/(p.Wx*ry*gc);
+      var f = (qwN/100)*Math.pow(H*100,4)/(185*EMOD*p.Ix);
+      var uD = f/(H*100/(craneO?300:150));
+      return Math.max(uN+uM, uD);
+    }, S.util);
+    col = cr; col.N = Ncf; col.M = Mcf; col.lam = Math.max(muX*H*100/cr.p.ix, 0.5*H*100/cr.p.iy);
+    col.f = (qwN/100)*Math.pow(H*100,4)/(185*EMOD*cr.p.Ix);
+    col.flim = H*100/(craneO?300:150);
+    col.craneN = craneN; col.craneM = craneM;
+  }
+
+  /* ---------- подкрановые балки ---------- */
+  var crb = null;
+  if (craneO){
+    var Fd = craneO.F*1.1*1.1*gn, bw = craneO.b;
+    var Mcr = (bw>=B) ? Fd*B/4 : 2*Fd/B*Math.pow(B/2 - bw/4, 2);
+    var Fn = craneO.F;
+    crb = pick(IK.concat(IB), function(p){
+      var uS = Mcr*100/(p.Wx*ry*gc);
+      var f = Fn*Math.pow(B*100,3)/(48*EMOD*p.Ix);
+      var uD = f/(B*100/400);
+      var uT = 0.1*Fd*B/4*100/(p.Wy*ry*gc);                   // поперечное торможение
+      return Math.max(uS+uT*0.5, uD);
+    }, S.util);
+    crb.M = Mcr;
+    crb.rail = RAIL[inp.craneQ] || RAIL[10];
+  }
+
+  /* ---------- фахверк торцов ---------- */
+  var nFach = Math.max(0, Math.round(width/6) - ns);
+  var fach = null, hFach = H + rise*0.6, stepF = nFach? width/(nFach+ns) : 6;
+  if (nFach>0){
+    var qF = we*0.8*1.4*stepF, qFn = we*0.8*stepF;
+    var lefF = 3.0;                                           // раскрепление ригелями / панелями
+    fach = pick(IB, function(p){
+      var Mf = qF*hFach*hFach/8*gn;
+      var uS = Mf*100/(p.Wx*ry*gc);
+      var f = (qFn/100)*Math.pow(hFach*100,4)*5/(384*EMOD*p.Ix);
+      var uD = f/(hFach*100/200);
+      if (lefF*100/p.iy > 200) return null;
+      return Math.max(uS,uD);
+    }, S.util);
+  }
+
+  /* ---------- стеновые ригели ---------- */
+  var girt = null, nGirtLines = 0, girtLen = 0;
+  var needGirt = (inp.wallMat==="prof") || (B > wallC.span + 0.05);
+  if (needGirt){
+    var aW = Math.min(wallC.span, 3.5)*S.purlStep;
+    nGirtLines = Math.max(2, Math.ceil(H/aW));
+    var qG = we*0.8*1.4*aW;
+    girt = pick(ZP.concat(CH.map(function(c){return {name:c.name,m:c.m,W:c.W,I:c.I};})), function(p){
+      var Mg = qG*B*B/10*gn;
+      return Mg*100/(p.W*ry*gc);
+    }, S.util);
+    girtLen = (2*Ltot + 2*width)*nGirtLines;
+  }
+
+  /* ==================== ВЕДОМОСТЬ ==================== */
+  var bom = [], nCols = (ns+1)*nFrames;
+  var colLen = H + (inp.crane==="over" ? 0.6 : 0);
+  var colMass = nCols*colLen*col.p.m*(craneO?1.15:1.0);
+  bom.push({sec:"Каркас"});
+  bom.push({pos:"К-1", name:"Колонны основные", prof:col.p.name, len:colLen, n:nCols,
+            mu:col.p.m, m:colMass, u:col.u,
+            note:"λ = "+col.lam.toFixed(0)+(ns>1?" · по средней колонне":"")});
+
+  var rigLen = (inp.roof==="gable") ? L/Math.cos(alpha) : L/Math.cos(alpha);
+  if (inp.rigel==="beam"){
+    var rMass = nFrames*ns*rigLen*rig.p.m*1.15;
+    bom.push({pos:"Р-1", name:"Ригель рамы (балка)", prof:rig.p.name, len:rigLen, n:nFrames*ns,
+              mu:rig.p.m, m:rMass, u:rig.u,
+              note:"M = "+rig.M.toFixed(0)+" кН·м · +15 % рёбра и монтажный стык"});
+  } else {
+    var tMass = nFrames*ns*truss.mass;
+    bom.push({pos:"Ф-1", name:"Ферма "+(truss.molod?"«Молодечно» h="+truss.h0.toFixed(2)+" м":"h="+truss.h0.toFixed(2)+"…"+ (truss.h0+rise).toFixed(2)+" м"),
+              prof:"см. ниже", len:L, n:nFrames*ns, mu:truss.mass/L, m:tMass, u:truss.top.u,
+              note:npanTxt(truss)});
+    bom.push({pos:"Ф-1.1", name:"— верхний пояс (сжатый)", prof:truss.top.p.name, len:rigLen,
+              n:nFrames*ns, mu:truss.top.p.m, m:0, u:truss.top.u, sub:true,
+              note:"N = "+truss.N.toFixed(0)+" кН"});
+    bom.push({pos:"Ф-1.2", name:"— нижний пояс (растянутый)", prof:truss.bot.p.name, len:L,
+              n:nFrames*ns, mu:truss.bot.p.m, m:0, u:truss.bot.u, sub:true,
+              note:"N = "+truss.N.toFixed(0)+" кН"});
+    bom.push({pos:"Ф-1.3", name:"— раскосы опорные", prof:truss.dia.p.name, len:truss.dLen,
+              n:2*nFrames*ns, mu:truss.dia.p.m, m:0, u:truss.dia.u, sub:true,
+              note:"N = "+(truss.V/Math.sin(Math.atan(truss.hMid/truss.d))).toFixed(0)+" кН"});
+    bom.push({pos:"Ф-1.4", name:"— решётка рядовая", prof:truss.dia2.p.name+" / "+truss.post.p.name,
+              len:truss.dLen, n:(truss.nDiag-2+truss.nPost)*nFrames*ns, mu:truss.dia2.p.m, m:0,
+              u:truss.dia2.u, sub:true, note:""});
+  }
+  if (nFach>0){
+    var fMass = fach.p.m*hFach*nFach*2;
+    bom.push({pos:"К-2", name:"Колонны фахверка торцов", prof:fach.p.name, len:hFach, n:nFach*2,
+              mu:fach.p.m, m:fMass, u:fach.u, note:"шаг "+stepF.toFixed(1)+" м"});
+  }
+  if (crb){
+    var crbLen = Ltot, nLines = 2;
+    var crbMass = crbLen*nLines*crb.p.m*1.15;
+    var railMass = crbLen*nLines*crb.rail.m;
+    bom.push({sec:"Крановые конструкции"});
+    bom.push({pos:"ПБ-1", name:"Балки подкрановые (+ тормозные)", prof:crb.p.name, len:B, n:nSteps*nLines,
+              mu:crb.p.m, m:crbMass, u:crb.u,
+              note:"M = "+crb.M.toFixed(0)+" кН·м · +15 % тормозные конструкции"});
+    bom.push({pos:"ПБ-2", name:"Рельс крановый с креплениями", prof:crb.rail.n, len:Ltot, n:nLines,
+              mu:crb.rail.m, m:railMass, u:null, note:""});
+  }
+  if (craneS){
+    var mono = pick(IB, function(p){
+      var Mm = 1.1*1.1*craneS.F*2*B/4*gn;
+      return Mm*100/(p.Wx*ry*gc);
+    }, S.util);
+    bom.push({sec:"Крановые конструкции"});
+    bom.push({pos:"ПП-1", name:"Путь подвесной кран-балки", prof:mono.p.name, len:Ltot, n:2,
+              mu:mono.p.m, m:Ltot*2*mono.p.m*1.1, u:mono.u, note:"подвеска к ригелю"});
+  }
+
+  bom.push({sec:"Ограждающий каркас"});
+  if (purl){
+    var pMass = nPurlLines*Ltot*purl.p.m*1.06;
+    bom.push({pos:"Пр-1", name:"Прогоны покрытия", prof:purl.p.name, len:B, n:nPurlLines*nSteps,
+              mu:purl.p.m, m:pMass, u:purl.u,
+              note:"шаг "+aP.toFixed(2)+" м, "+nPurlLines+" нит. · +6 % нахлёсты и крепёж"});
+  }
+  if (girt){
+    bom.push({pos:"Пр-2", name:"Ригели стеновые", prof:girt.p.name, len:B, n:Math.round(girtLen/B),
+              mu:girt.p.m, m:girtLen*girt.p.m*1.06, u:girt.u,
+              note:nGirtLines+" ярусов · +6 % крепёж"});
+  }
+
+  var frameMass = bom.reduce(function(s,r){return s + (r.m||0);}, 0);
+  var tiesMass = frameMass*S.ties;
+  var jointMass = frameMass*S.joints;
+  bom.push({sec:"Связи и узлы"});
+  bom.push({pos:"Св-1", name:"Связи вертикальные и горизонтальные, распорки", prof:"уголок / труба",
+            len:null, n:null, mu:null, m:tiesMass, u:null,
+            note:(S.ties*100).toFixed(0)+" % от массы каркаса"});
+  bom.push({pos:"У-1", name:"Узлы, фасонки, опорные плиты, метизы", prof:"лист / метизы",
+            len:null, n:null, mu:null, m:jointMass, u:null,
+            note:(S.joints*100).toFixed(0)+" % от массы каркаса"});
+
+  var total = frameMass + tiesMass + jointMass;
+
+  /* ---------- предупреждения ---------- */
+  if (rig && rig.over) W.push({c:1, t:"Ригель не подбирается по сортаменту двутавров",
+      d:"Требуемый момент сопротивления превышает 100Б1. Для пролёта "+L+" м с балкой сплошного сечения нужна сварная балка переменного сечения или переход на ферму."});
+  if (col.over) W.push({c:1, t:"Колонна не подбирается по сортаменту",
+      d:"Нужна сварная колонна двутаврового или сквозного сечения, либо уменьшение шага рам."});
+  if (inp.rigel==="beam" && L>=21) W.push({c:0, t:"Пролёт "+L+" м прокатной балкой — неэкономично",
+      d:"На пролётах от 21 м прокатный ригель подбирается прогибом, а не прочностью, и проигрывает ферме в 1,5–2,5 раза по массе. Альтернативы: ферма (переключатель «Тип ригеля») или сварная рама переменного сечения — её этот расчёт не подбирает."});
+  if (inp.rigel==="truss" && inp.roof==="flat")
+      W.push({c:0, t:"Принята ферма «Молодечно»",
+      d:"Пояса — тавры из широкополочных двутавров, решётка — круглые трубы, узлы бесфасоночные. Строительный уклон "+slope+" % создаётся верхним поясом, нижний пояс горизонтален."});
+  if (0.9*(gRoof+gPurl) < wUplift/1.4*0.9)
+      W.push({c:0, t:"Возможен отрыв покрытия ветром",
+      d:"Собственный вес покрытия "+((gRoof+gPurl)*100).toFixed(0)+" кгс/м² меньше ветрового отсоса "+(we*100).toFixed(0)+" кгс/м². Крепление панелей и прогонов рассчитывать на отрыв."});
+  if (mu<1) W.push({c:0, t:"Уклон "+aDeg.toFixed(1)+"° снижает снеговую нагрузку",
+      d:"Принято μ = "+mu.toFixed(2)+" по СП 20.13330. Проверьте отсутствие снеговых мешков у перепадов высот и парапетов."});
+  if (B>7.5) W.push({c:0, t:"Шаг рам "+B.toFixed(1)+" м",
+      d:"При шаге более 7,5 м прогоны и панели становятся определяющими по расходу. Сравните вариант с шагом 6 м."});
+  if (Math.abs(B-inp.B)>0.01) W.push({c:0, t:"Шаг рам уточнён до "+B.toFixed(2)+" м",
+      d:"Длина здания "+Ltot+" м разбита на "+nSteps+" шагов, чтобы уложиться в габарит без доборного пролёта."});
+  if (inp.crane==="over") W.push({c:0, t:"Отметка головки кранового рельса ≈ "+(H-craneO.hk-0.4).toFixed(2)+" м",
+      d:"От низа ригеля вычтены габарит крана "+craneO.hk+" м и зазор 400 мм. Полезная высота подъёма крюка меньше этой отметки на 0,8–1,2 м."});
+  if (!inp.purlins) W.push({c:0, t:"Кровля без прогонов",
+      d:"Панель принята пролётом "+B.toFixed(2)+" м по рамам. Предельный пролёт панели "+roofC.span.toFixed(1)+" м — "+(B<=roofC.span?"условие выполнено":"ТРЕБУЕТСЯ проверка у производителя панели")+"."});
+
+  return {
+    inp:inp, S:S, B:B, nSteps:nSteps, nFrames:nFrames, width:width, area:area,
+    alpha:alpha, aDeg:aDeg, rise:rise, slope:slope, zTop:zTop, L:L, H:H, ns:ns, Ltot:Ltot,
+    roofC:roofC, wallC:wallC, gRoof:gRoof, gWall:gWall, gPurl:gPurl, gExtra:gExtra, gOwn:gOwn,
+    Sg:Sg, mu:mu, S0:S0, unbal:unbal, w0:w0, kz:kz, we:we, qwN:qwN, q_d:q_d, q_n:q_n,
+    ry:ry, rig:rig, col:col, truss:truss, purl:purl, aP:aP, nPurlLines:nPurlLines,
+    girt:girt, nGirtLines:nGirtLines, fach:fach, nFach:nFach, stepF:stepF, hFach:hFach,
+    crb:crb, craneO:craneO, craneS:craneS, aSusp:aSusp, Psusp:Psusp,
+    bom:bom, total:total, perM2:total/area, perFrame:(total/nFrames), warns:W
+  };
+}
+function npanTxt(t){ return t.npan+" панелей × "+t.d.toFixed(2)+" м"; }
+//</ENGINE>
+
+/* ==================================================================
+   ЧЕРТЁЖ
+   ================================================================== */
+document.head.insertAdjacentHTML("beforeend", "<style>"+`
+.s-steel{fill:var(--ink-2);stroke:var(--ink);stroke-width:.8}
+.s-steel-l{fill:var(--muted);stroke:var(--ink);stroke-width:.7;opacity:.55}
+.s-out{fill:none;stroke:var(--ink);stroke-width:1.4;stroke-linejoin:round}
+.s-thin{fill:none;stroke:var(--ink);stroke-width:.9}
+.s-web{fill:none;stroke:var(--ink);stroke-width:1.6}
+.s-dim{stroke:var(--blue);stroke-width:.8;fill:none}
+.s-ext{stroke:var(--blue);stroke-width:.6;fill:none;opacity:.75}
+.s-ax{stroke:var(--blue);stroke-width:.7;fill:none;stroke-dasharray:14 4 2 4;opacity:.85}
+.s-axc{fill:var(--surface);stroke:var(--blue);stroke-width:1}
+.s-lead{stroke:var(--accent);stroke-width:.9;fill:none}
+.s-grd{stroke:var(--ink);stroke-width:1.6}
+.s-crane{fill:none;stroke:var(--accent);stroke-width:1.3}
+.s-crane-f{fill:var(--accent);opacity:.14}
+.s-brace{stroke:var(--accent);stroke-width:1.2;fill:none}
+.t-dim{font-family:var(--f-mono);font-size:11px;fill:var(--blue);text-anchor:middle;font-variant-numeric:tabular-nums}
+.t-ax{font-family:var(--f-display);font-weight:700;font-size:12px;fill:var(--blue);text-anchor:middle;dominant-baseline:central}
+.t-lab{font-family:var(--f-display);font-weight:700;font-size:12.5px;fill:var(--accent);letter-spacing:.04em}
+.t-note{font-family:var(--f-body);font-size:11px;fill:var(--muted)}
+.t-el{font-family:var(--f-display);font-size:11px;fill:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+`+"</style>");
+
+function n2(v,d){ return v.toLocaleString("ru-RU",{minimumFractionDigits:d===undefined?0:d, maximumFractionDigits:d===undefined?0:d}); }
+function esc(t){ return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+
+/* размерная линия с засечками по ГОСТ 21.501 */
+function dimH(x1,x2,y,txt,off){
+  off = off||0;
+  var t = "";
+  t += '<path class="s-ext" d="M'+x1+' '+(y-off-4)+'V'+(y+5)+'"/>';
+  t += '<path class="s-ext" d="M'+x2+' '+(y-off-4)+'V'+(y+5)+'"/>';
+  t += '<path class="s-dim" d="M'+x1+' '+y+'H'+x2+'"/>';
+  t += '<path class="s-dim" d="M'+(x1-4)+' '+(y+4)+'l8 -8"/>';
+  t += '<path class="s-dim" d="M'+(x2-4)+' '+(y+4)+'l8 -8"/>';
+  t += '<text class="t-dim" x="'+((x1+x2)/2)+'" y="'+(y-5)+'">'+esc(txt)+'</text>';
+  return t;
+}
+function dimV(y1,y2,x,txt,side){
+  var t = "";
+  var d = (side==="l") ? 6 : -6;
+  t += '<path class="s-ext" d="M'+(x-d)+' '+y1+'H'+(x+5*Math.sign(d))+'"/>';
+  t += '<path class="s-ext" d="M'+(x-d)+' '+y2+'H'+(x+5*Math.sign(d))+'"/>';
+  t += '<path class="s-dim" d="M'+x+' '+y1+'V'+y2+'"/>';
+  t += '<path class="s-dim" d="M'+(x-4)+' '+(y1+4)+'l8 -8"/>';
+  t += '<path class="s-dim" d="M'+(x-4)+' '+(y2+4)+'l8 -8"/>';
+  t += '<text class="t-dim" x="0" y="0" transform="translate('+(x-4)+','+((y1+y2)/2)+') rotate(-90)">'+esc(txt)+'</text>';
+  return t;
+}
+/* выноска сечения: полка с наклонной линией */
+function leader(x,y,dx,dy,txt,anchor){
+  var x2=x+dx, y2=y+dy, x3=x2+(dx>0?52:-52);
+  return '<path class="s-lead" d="M'+x+' '+y+'L'+x2+' '+y2+'H'+x3+'"/>'+
+         '<circle cx="'+x+'" cy="'+y+'" r="2" fill="var(--accent)"/>'+
+         '<text class="t-lab" x="'+(dx>0?x2+3:x2-3)+'" y="'+(y2-4)+'" text-anchor="'+(dx>0?"start":"end")+'">'+esc(txt)+'</text>';
+}
+function axisMark(x,y,txt,r){
+  r = r||11;
+  return '<circle class="s-axc" cx="'+x+'" cy="'+y+'" r="'+r+'"/>'+
+         '<text class="t-ax" x="'+x+'" y="'+y+'">'+esc(txt)+'</text>';
+}
+const AXL = ["А","Б","В","Г","Д","Е","Ж","И","К","Л"];
+
+/* ---------- поперечная рама ---------- */
+function drawFrame(m){
+  var L=m.L, ns=m.ns, H=m.H, Wd=m.width, rise=m.rise, mono=(m.inp.roof==="mono");
+  var hRig = (m.inp.rigel==="beam") ? m.rig.p.h/1000 : m.truss.h0;
+  var topMax = H + hRig + rise + (m.inp.rigel!=="beam" && !mono ? 0 : 0);
+  var padL=118, padR=118, padT=66, padB=146, vw=1040;
+  var sc = (vw-padL-padR)/Wd;
+  if (sc*topMax > 400) sc = 400/topMax;
+  var drawW = Wd*sc;
+  padL = (vw - drawW)/2;
+  var vh = padT + padB + topMax*sc;
+  var X = function(x){ return padL + x*sc; };
+  var Y = function(y){ return padT + (topMax - y)*sc; };
+  /* верх ригеля в точке x */
+  function ridgeAt(x){
+    if (mono) return H + hRig + x/Wd*rise;
+    var j = Math.min(ns-1, Math.floor(x/L + 1e-9)), u = x - j*L;
+    return H + hRig + rise*(1 - Math.abs(2*u/L - 1));
+  }
+  var g0 = Y(0), o = [];
+
+  /* земля */
+  o.push('<path class="s-grd" d="M'+(padL-70)+' '+g0+'H'+(padL+drawW+70)+'"/>');
+  for (var hx=padL-64; hx<padL+drawW+70; hx+=13)
+    o.push('<path class="s-ext" style="opacity:.5" d="M'+hx+' '+g0+'l-7 9"/>');
+
+  /* колонны */
+  var bc = Math.max(5, m.col.p.h/1000*sc), cols=[];
+  for (var i=0;i<=ns;i++){
+    var xc = X(i*L);
+    cols.push(xc);
+    o.push('<rect class="s-steel" x="'+(xc-bc/2)+'" y="'+Y(H)+'" width="'+bc+'" height="'+(g0-Y(H))+'"/>');
+    o.push('<path class="s-ax" d="M'+xc+' '+(Y(ridgeAt(i*L))-26)+'V'+(g0+52)+'"/>');
+    /* база */
+    o.push('<rect class="s-steel-l" x="'+(xc-bc*0.9)+'" y="'+(g0-4)+'" width="'+(bc*1.8)+'" height="4"/>');
+  }
+
+  /* ригель */
+  if (m.inp.rigel==="beam"){
+    var d = Math.max(4, hRig*sc);
+    for (var j=0;j<ns;j++){
+      var pts=[], k;
+      for (k=0;k<=20;k++){
+        var x = j*L + k*L/20;
+        pts.push([X(x), Y(ridgeAt(x))]);
+      }
+      var upper = pts.map(function(p){return p[0]+" "+p[1];}).join("L");
+      var lower = pts.slice().reverse().map(function(p){return p[0]+" "+(p[1]+d);}).join("L");
+      o.push('<path class="s-steel" style="fill:var(--muted);opacity:.85" d="M'+upper+'L'+lower+'Z"/>');
+    }
+  } else {
+    var t = m.truss, hM = t.hMid;
+    for (var j2=0;j2<ns;j2++){
+      var x0=j2*L, npan=t.npan, dd=t.d;
+      var topPt=[], botPt=[];
+      for (var q=0;q<=npan;q++){
+        var xx = x0 + q*dd;
+        topPt.push([X(xx), Y(ridgeAt(xx))]);
+        botPt.push([X(xx), Y(H)]);
+      }
+      o.push('<path class="s-out" d="M'+topPt.map(function(p){return p[0]+" "+p[1];}).join("L")+'"/>');
+      o.push('<path class="s-out" d="M'+botPt.map(function(p){return p[0]+" "+p[1];}).join("L")+'"/>');
+      /* треугольная решётка со стойками */
+      var w="";
+      for (var q2=0;q2<npan;q2++){
+        var up = (q2 % 2 === 0);
+        var a = up ? botPt[q2] : topPt[q2];
+        var b = up ? topPt[q2+1] : botPt[q2+1];
+        w += "M"+a[0]+" "+a[1]+"L"+b[0]+" "+b[1];
+      }
+      for (var q3=0;q3<=npan;q3+=2)
+        w += "M"+topPt[q3][0]+" "+topPt[q3][1]+"L"+botPt[q3][0]+" "+botPt[q3][1];
+      o.push('<path class="s-web" d="'+w+'"/>');
+    }
+  }
+
+  /* прогоны */
+  if (m.inp.purlins){
+    var step = Wd/(m.nPurlLines-1), pz = Math.max(3, Math.min(7, 0.15*sc));
+    for (var pI=0; pI<m.nPurlLines; pI++){
+      var xp = Math.min(Wd, pI*step), yp = Y(ridgeAt(xp));
+      o.push('<rect class="s-steel" x="'+(X(xp)-pz/2)+'" y="'+(yp-pz)+'" width="'+pz+'" height="'+pz+'"/>');
+    }
+    /* линия кровли */
+    var rp=[];
+    for (var r1=0;r1<=100;r1++){ var xr=Wd*r1/100; rp.push(X(xr)+" "+(Y(ridgeAt(xr))-pz-2)); }
+    o.push('<path class="s-thin" style="stroke:var(--accent);opacity:.55" d="M'+rp.join("L")+'"/>');
+  }
+
+  /* кран */
+  if (m.craneO){
+    var hr = H - m.craneO.hk - 0.4;
+    var yr = Y(hr);
+    for (var c2=0;c2<ns;c2++){
+      var xa = X(c2*L)+bc/2, xb = X((c2+1)*L)-bc/2;
+      o.push('<rect class="s-steel-l" x="'+xa+'" y="'+(yr-10)+'" width="'+(xb-xa)+'" height="0"/>');
+      o.push('<path class="s-crane" d="M'+(xa+6)+' '+(yr-3)+'H'+(xb-6)+'"/>');
+      o.push('<rect class="s-crane-f" x="'+(xa+6)+'" y="'+(yr-16)+'" width="'+(xb-xa-12)+'" height="13"/>');
+      o.push('<text class="t-el" x="'+((xa+xb)/2)+'" y="'+(yr-6)+'" text-anchor="middle" style="fill:var(--accent)">КРАН '+m.inp.craneQ+' Т</text>');
+      /* консоль и подкрановая балка */
+      o.push('<rect class="s-steel" x="'+xa+'" y="'+yr+'" width="'+Math.min(34,(xb-xa)/6)+'" height="7"/>');
+      o.push('<rect class="s-steel" x="'+(xb-Math.min(34,(xb-xa)/6))+'" y="'+yr+'" width="'+Math.min(34,(xb-xa)/6)+'" height="7"/>');
+    }
+    o.push(dimV(yr, g0, padL+drawW+62, "отм. г.р. "+n2(hr,2)+" м", "r"));
+  }
+  if (m.craneS){
+    var ySus = Y(H) + 4;
+    for (var c3=0;c3<ns;c3++){
+      var xl = X(c3*L + m.aSusp), xrr = X((c3+1)*L - m.aSusp);
+      o.push('<path class="s-crane" d="M'+xl+' '+(ySus)+'V'+(ySus+16)+'M'+xrr+' '+ySus+'V'+(ySus+16)+'"/>');
+      o.push('<path class="s-crane" d="M'+xl+' '+(ySus+16)+'H'+xrr+'"/>');
+      o.push('<rect class="s-crane-f" x="'+xl+'" y="'+(ySus+16)+'" width="'+(xrr-xl)+'" height="10"/>');
+      o.push('<text class="t-el" x="'+((xl+xrr)/2)+'" y="'+(ySus+34)+'" text-anchor="middle" style="fill:var(--accent)">КРАН-БАЛКА '+m.inp.craneQ+' Т</text>');
+    }
+  }
+
+  /* выноски сечений */
+  var xEdge = cols[0];
+  o.push(leader(xEdge, Y(H*0.55), 46, -30, m.col.p.name));
+  if (m.inp.rigel==="beam"){
+    o.push(leader(X(Wd*0.22), Y(ridgeAt(Wd*0.22))+3, 22, -44, m.rig.p.name));
+  } else {
+    o.push(leader(X(L*0.30), Y(ridgeAt(L*0.30)), -22, -42, m.truss.top.p.name));
+    o.push(leader(X(L*0.42), Y(H), 26, 34, m.truss.bot.p.name));
+    o.push(leader(X(L*0.11), Y(H + m.truss.hMid*0.45), 30, 40, m.truss.dia.p.name));
+  }
+  if (m.purl) o.push(leader(X(L*0.5), Y(ridgeAt(L*0.5))-5, 30, -46, m.purl.p.name));
+  if (m.crb)  o.push(leader(X(L*0.02)+bc, Y(H-m.craneO.hk-0.4)+4, 30, 30, m.crb.p.name));
+
+  /* размеры */
+  var yd1 = g0 + 54, yd2 = g0 + 84;
+  for (var s1=0;s1<ns;s1++) o.push(dimH(X(s1*L), X((s1+1)*L), yd1, n2(L*1000)));
+  if (ns>1) o.push(dimH(X(0), X(Wd), yd2, n2(Wd*1000)));
+  for (var a1=0;a1<=ns;a1++) o.push(axisMark(X(a1*L), g0+30, AXL[a1]));
+  o.push(dimV(Y(H), g0, padL-52, n2(H*1000), "l"));
+  o.push(dimV(Y(ridgeAt(mono?Wd:L/2)), g0, padL-86, n2(Math.round((H+hRig+rise)*1000)), "l"));
+
+  /* уклон */
+  var xs = mono ? Wd*0.72 : Wd - L*0.30, ys = ridgeAt(xs);
+  var sx = X(xs), sy = Y(ys)-20, dxs = 38;
+  o.push('<path class="s-dim" d="M'+sx+' '+sy+'l'+dxs+' '+(mono? -dxs*m.slope/100 : dxs*m.slope/100)+'"/>');
+  o.push('<path class="s-dim" d="M'+sx+' '+sy+'h'+dxs+'"/>');
+  o.push('<text class="t-dim" x="'+(sx+dxs/2)+'" y="'+(sy-7)+'">i = '+n2(m.slope,1).replace(".",",")+' %</text>');
+
+  /* подпись */
+  o.push('<text class="t-el" x="'+padL+'" y="'+(vh-12)+'">Поперечная рама — ось 1…'+(m.nSteps+1)+' · '+
+        (m.inp.rigel==="beam"?"ригель сплошностенчатый":(m.truss.molod?"ферма «Молодечно»":"ферма из ГСП"))+
+        ' · сталь '+STEEL[m.inp.steel].name+'</text>');
+
+  return '<svg viewBox="0 0 '+vw+' '+vh+'" role="img" aria-label="Схема поперечной рамы">'+o.join("")+'</svg>';
+}
+
+/* ---------- план осей ---------- */
+function drawPlan(m){
+  var ns=m.ns, L=m.L, B=m.B, nS=m.nSteps, Wd=m.width, Lt=m.Ltot;
+  var padL=100, padR=70, padT=54, padB=132, vw=1040;
+  var sc = Math.min((vw-padL-padR)/Lt, 300/Wd);
+  var drawW = Lt*sc, drawH = Wd*sc;
+  padL = (vw-drawW)/2;
+  var vh = padT+padB+drawH;
+  var X = function(x){ return padL + x*sc; }, Y = function(y){ return padT + y*sc; };
+  var o = [];
+
+  /* оси */
+  for (var i=0;i<=nS;i++){
+    o.push('<path class="s-ax" d="M'+X(i*B)+' '+(padT-26)+'V'+(padT+drawH+30)+'"/>');
+    o.push(axisMark(X(i*B), padT-38, String(i+1), 10));
+  }
+  for (var a=0;a<=ns;a++){
+    o.push('<path class="s-ax" d="M'+(padL-30)+' '+Y(a*L)+'H'+(padL+drawW+26)+'"/>');
+    o.push(axisMark(padL-44, Y(a*L), AXL[a], 10));
+  }
+  /* рамы и колонны */
+  for (var i2=0;i2<=nS;i2++){
+    o.push('<path class="s-out" d="M'+X(i2*B)+' '+Y(0)+'V'+Y(Wd)+'"/>');
+    for (var a2=0;a2<=ns;a2++){
+      var cw = Math.max(4, m.col.p.b/1000*sc*1.6);
+      o.push('<rect class="s-steel" x="'+(X(i2*B)-cw/2)+'" y="'+(Y(a2*L)-cw/2)+'" width="'+cw+'" height="'+cw+'"/>');
+    }
+  }
+  /* прогоны — тонкие продольные */
+  if (m.purl){
+    for (var p=1;p<m.nPurlLines-1;p++){
+      var yp = Y(p*Wd/(m.nPurlLines-1));
+      o.push('<path class="s-thin" style="opacity:.35" d="M'+X(0)+' '+yp+'H'+X(Lt)+'"/>');
+    }
+  }
+  /* связевые блоки */
+  function cross(i1,i2c,y1,y2,cls){
+    return '<path class="'+(cls||"s-brace")+'" d="M'+X(i1)+' '+Y(y1)+'L'+X(i2c)+' '+Y(y2)+'M'+X(i1)+' '+Y(y2)+'L'+X(i2c)+' '+Y(y1)+'"/>';
+  }
+  var blocks = [0, nS-1];
+  if (nS>=10) blocks.push(Math.floor(nS/2));
+  blocks.forEach(function(bi){
+    for (var a3=0;a3<ns;a3++) o.push(cross(bi*B,(bi+1)*B, a3*L, (a3+1)*L));
+  });
+  /* вертикальные связи по колоннам — в среднем шаге */
+  var vb = Math.floor(nS/2);
+  for (var a4=0;a4<=ns;a4++){
+    o.push('<path class="s-brace" style="stroke-dasharray:5 3" d="M'+X(vb*B)+' '+Y(a4*L)+'H'+X((vb+1)*B)+'"/>');
+  }
+
+  /* размеры */
+  var yd = padT+drawH+46;
+  o.push(dimH(X(0), X(B), yd, n2(B*1000,0)));
+  o.push(dimH(X(0), X(Lt), yd+30, nS+" × "+n2(B*1000,0)+" = "+n2(Lt*1000)));
+  o.push(dimV(Y(0), Y(Wd), padL-72, n2(Wd*1000), "l"));
+
+  o.push('<text class="t-el" x="'+padL+'" y="'+(vh-10)+'">План осей · '+m.nFrames+' рам · '+
+    '<tspan style="fill:var(--accent)">✕</tspan> связи горизонтальные по покрытию · '+
+    '<tspan style="fill:var(--accent)">- -</tspan> вертикальные связи по колоннам</text>');
+  return '<svg viewBox="0 0 '+vw+' '+vh+'" role="img" aria-label="План осей и связей">'+o.join("")+'</svg>';
+}
+
+/* ==================================================================
+   ИНТЕРФЕЙС
+   ================================================================== */
+var $ = function(id){ return document.getElementById(id); };
+var scheme = "opt";
+
+/* заполнение зависимых списков */
+(function initSelects(){
+  ["roofT","wallT"].forEach(function(id){
+    $(id).innerHTML = PANEL_T.map(function(t){
+      return '<option value="'+t+'"'+((id==="roofT"&&t===100)||(id==="wallT"&&t===150)?" selected":"")+'>'+t+'</option>';
+    }).join("");
+  });
+})();
+function fillCraneQ(){
+  var kind = $("crane").value;
+  if (kind==="none") return;
+  var keys = Object.keys(CRANE[kind]);
+  $("craneQ").innerHTML = keys.map(function(q,i){
+    return '<option value="'+q+'"'+(i===(kind==="susp"?1:1)?" selected":"")+'>'+q.replace(".",",")+' т</option>';
+  }).join("");
+}
+
+function readInputs(){
+  var v = function(id){ return parseFloat($(id).value); };
+  return {
+    L:v("L"), nspans:parseInt($("nspans").value,10), B:v("B"), Ltot:v("Ltot"), H:v("H"),
+    roof:$("roof").value, slope:v("slope"), rigel:$("rigel").value,
+    roofMat:$("roofMat").value, roofCore:$("roofCore").value, roofT:v("roofT"),
+    roofProf:$("roofProf").value, roofIns:$("roofIns").checked,
+    wallMat:$("wallMat").value, wallCore:$("wallCore").value, wallT:v("wallT"),
+    wallProf:$("wallProf").value, purlins:$("purlins").checked,
+    crane:$("crane").value, craneQ:parseFloat($("craneQ").value)||5,
+    snowReg:$("snowReg").value, windReg:$("windReg").value, terrain:$("terrain").value,
+    ce:v("ce"), snowVar:$("snowVar").checked, steel:$("steel").value, gn:v("gn"),
+    scheme:scheme
+  };
+}
+
+/* видимость зависимых полей */
+function syncVisibility(){
+  var rm = $("roofMat").value, wm = $("wallMat").value, cr = $("crane").value;
+  $("roofSandwich").hidden = rm!=="sandwich";
+  $("roofProfWrap").hidden = rm!=="prof";
+  $("roofInsWrap").hidden  = rm!=="prof";
+  $("wallSandwich").hidden = wm!=="sandwich";
+  $("wallProfWrap").hidden = wm!=="prof";
+  $("craneQWrap").hidden = cr==="none";
+  var roof = $("roof").value;
+  var sl = $("slope");
+  if (roof==="flat" && sl.value>5) sl.value = 2;
+  if (roof!=="flat" && sl.value<4) sl.value = 10;
+  $("rigelHint").textContent = ($("rigel").value==="truss")
+    ? (roof==="flat"
+        ? "Плоская кровля + ферма → ферма «Молодечно»: пояса из тавров, решётка из круглых труб, узлы бесфасоночные. Ферма шарнирно опирается на колонны, колонны защемлены в фундаменте."
+        : "Ферма с параллельными/трапециевидными поясами из гнутосварного профиля. Шарнирное опирание на колонны, защемление колонн в базе.")
+    : "Рама с жёстким карнизным узлом и шарнирными базами колонн. Ригель — прокатный двутавр по ГОСТ 26020.";
+}
+
+/* ---------- рендер ---------- */
+function render(){
+  syncVisibility();
+  var inp = readInputs();
+  if (!(inp.L>0 && inp.B>0 && inp.Ltot>0 && inp.H>0)) return;
+  var m;
+  try { m = compute(inp); }
+  catch(e){ $("warns").innerHTML = '<div class="wn c"><span class="ic">!</span><div>Ошибка расчёта: '+esc(e.message)+'</div></div>'; return; }
+
+  $("gabHint").textContent = "Габарит "+n2(m.width,1)+" × "+n2(m.Ltot,1)+" м = "+n2(m.area)+" м² · "+
+                             m.nFrames+" рам с шагом "+n2(m.B,2)+" м";
+  $("craneHint").textContent = inp.crane==="none" ? "Кран не учитывается." :
+    (inp.crane==="susp"
+      ? "Путь подвешен к ригелю: добавляются сосредоточенные нагрузки на ригель и монорельсовые балки по всей длине."
+      : "Опорный кран: подкрановые балки по консолям колонн, рельс, тормозные конструкции. Колонна считается внецентренно сжатой.");
+  $("schemeNote").textContent = m.S.note;
+
+  /* ---- сводка ---- */
+  var alt = null;
+  try { alt = compute(Object.assign({}, inp, {rigel: inp.rigel==="beam"?"truss":"beam"})); } catch(e){}
+  $("stats").innerHTML =
+    stat("Общий тоннаж", n2(m.total/1000,2), "т", true) +
+    stat("Расход стали", n2(m.perM2,1), "кг/м²") +
+    stat("На шаг "+n2(m.B,2)+" м", n2(m.perFrame,0), "кг") +
+    stat(inp.rigel==="beam"?"Ригель":"Ферма",
+         inp.rigel==="beam" ? m.rig.p.name : m.truss.top.p.name+" / "+m.truss.bot.p.name, "") +
+    stat("Колонна", m.col.p.name, "");
+
+  /* ---- чертежи ---- */
+  $("dwgFrame").innerHTML = drawFrame(m);
+  $("dwgPlan").innerHTML  = drawPlan(m);
+  $("frameCaption").textContent = "М 1:100 · схема " + m.S.label;
+  $("planCaption").textContent  = m.nSteps + " × " + n2(m.B,2) + " = " + n2(m.Ltot,1) + " м";
+
+  /* ---- ведомость ---- */
+  var h = '<thead><tr><th>Наименование</th><th>Профиль</th><th>Длина, м</th><th>Кол-во</th>'+
+          '<th>Масса 1 м, кг</th><th>Масса, кг</th><th>Использ.</th></tr></thead><tbody>';
+  m.bom.forEach(function(r){
+    if (r.sec){ h += '<tr class="sec"><td colspan="7">'+esc(r.sec)+'</td></tr>'; return; }
+    h += '<tr>'+
+      '<td>'+(r.sub?'<span style="opacity:.75">':'')+esc(r.name)+(r.sub?'</span>':'')+
+        (r.note?' <span class="pos">'+esc(r.note)+'</span>':'')+'</td>'+
+      '<td class="num">'+esc(r.prof)+'</td>'+
+      '<td class="num">'+(r.len?n2(r.len,2):"—")+'</td>'+
+      '<td class="num">'+(r.n?n2(r.n):"—")+'</td>'+
+      '<td class="num">'+(r.mu?n2(r.mu,1):"—")+'</td>'+
+      '<td class="num">'+(r.m?n2(Math.round(r.m)):"<span class=\'pos\'>в составе</span>")+'</td>'+
+      '<td>'+(r.u!=null?utilBar(r.u):"—")+'</td></tr>';
+  });
+  h += '<tr class="tot"><td>Итого по зданию</td><td class="num">'+n2(m.area)+' м²</td><td colspan="3"></td>'+
+       '<td class="num">'+n2(Math.round(m.total))+'</td><td class="num">'+n2(m.perM2,1)+' кг/м²</td></tr></tbody>';
+  $("bom").innerHTML = h;
+
+  /* ---- нагрузки ---- */
+  var kg = function(kPa){ return n2(kPa*101.97,1); };
+  var l = "";
+  function kv(k,v){ l += '<div class="k">'+k+'</div><div class="v">'+v+'</div>'; }
+  function hr(t){ l += '<div class="hr"></div>'; if(t) l += '<div class="k" style="font-weight:600">'+t+'</div><div class="v"></div>'; }
+  kv("Кровля — "+esc(m.roofC.name), kg(m.gRoof)+" кгс/м²");
+  if (m.purl) kv("Прогоны Z, шаг "+n2(m.aP,2)+" м", kg(m.gPurl)+" кгс/м²");
+  kv("Связи, подвески, коммуникации", kg(m.gExtra)+" кгс/м²");
+  kv("Собственный вес ригеля", kg(m.gOwn)+" кгс/м²");
+  kv("<b>Постоянная, норм. / расч.</b>", "<b>"+kg(m.gRoof+m.gPurl+m.gExtra+m.gOwn)+" / "+
+     kg(m.gRoof*1.2+(m.gPurl+m.gExtra+m.gOwn)*1.05)+" кгс/м²</b>");
+  hr("Снег");
+  kv("Район "+["","I","II","III","IV","V"][+m.inp.snowReg]+" · S<sub>g</sub>", n2(m.Sg,2)+" кПа");
+  kv("μ (уклон "+n2(m.aDeg,1)+"°) · c<sub>e</sub>", n2(m.mu,2)+" · "+n2(m.inp.ce,2));
+  kv("S₀ норм. / расч.", kg(m.S0)+" / "+kg(m.S0*1.4)+" кгс/м²");
+  if (m.unbal) kv("Неравномерное отложение", "0,75 / 1,25");
+  hr("Ветер");
+  kv("Район · w₀", n2(m.w0,2)+" кПа");
+  kv("k(z<sub>e</sub>) на отм. "+n2(m.zTop,1)+" м · тип "+m.inp.terrain, n2(m.kz,2));
+  kv("w<sub>e</sub> норм.", kg(m.we)+" кгс/м²");
+  kv("Погонная на раму (расч.)", n2(m.qwN*1.4,2)+" кН/м");
+  hr("Расчётная схема");
+  kv("Погонная на ригель q", n2(m.q_d,2)+" кН/м");
+  if (m.rig){
+    kv("Момент в пролёте / карнизе", n2(m.rig.Mspn,0)+" / "+n2(m.rig.Mcor,0)+" кН·м");
+    kv("Принято для подбора ригеля", n2(m.rig.M,0)+" кН·м");
+  }
+  if (m.truss) kv("Усилие в поясах / опорном раскосе", n2(m.truss.N,0)+" / "+
+      n2(m.truss.V/Math.sin(Math.atan(m.truss.hMid/m.truss.d)),0)+" кН");
+  kv("Продольная сила в колонне", n2(m.col.N,0)+" кН");
+  kv("Момент в колонне", n2(m.col.M,0)+" кН·м");
+  if (m.craneO) kv("От крана: N / M", n2(m.col.craneN,0)+" кН / "+n2(m.col.craneM,0)+" кН·м");
+  $("loads").innerHTML = l;
+
+  /* ---- проверки ---- */
+  var c = "";
+  function chk(name, u, val){
+    var cls = u>0.95?"c":(u>0.85?"w":"");
+    c += '<div class="it"><span class="dot '+cls+'"></span><span>'+name+'</span>'+
+         '<span class="val">'+val+'</span></div>';
+  }
+  if (m.rig){
+    chk("Ригель "+m.rig.p.name+" — прочность", m.rig.M*100/(m.rig.p.Wx*m.ry*m.S.c1),
+        "σ/R<sub>y</sub> = "+n2(m.rig.M*100/(m.rig.p.Wx*m.ry*m.S.c1),2));
+    chk("Ригель — прогиб", m.rig.f/m.rig.flim,
+        "f = "+n2(m.rig.f,2)+" / "+n2(m.rig.flim,1)+" см");
+  }
+  if (m.truss){
+    chk("Верхний пояс "+m.truss.top.p.name+" — устойчивость", m.truss.top.u, "N/(φAR) = "+n2(m.truss.top.u,2));
+    chk("Нижний пояс "+m.truss.bot.p.name+" — прочность", m.truss.bot.u, "N/(AR) = "+n2(m.truss.bot.u,2));
+    chk("Опорный раскос "+m.truss.dia.p.name, m.truss.dia.u, "N/(φAR) = "+n2(m.truss.dia.u,2));
+    chk("Ферма — прогиб", m.truss.f/m.truss.flim, "f ≈ "+n2(m.truss.f,2)+" / "+n2(m.truss.flim,1)+" см");
+  }
+  chk("Колонна "+m.col.p.name+" — устойчивость", m.col.u, "N/(φA)+M/W = "+n2(m.col.u,2));
+  chk("Колонна — гибкость", m.col.lam/m.S.lam, "λ = "+n2(m.col.lam,0)+" ≤ "+m.S.lam);
+  chk("Колонна — перемещение верха от ветра", m.col.f/m.col.flim,
+      "Δ = "+n2(m.col.f,2)+" / "+n2(m.col.flim,1)+" см");
+  if (m.purl) chk("Прогон "+m.purl.p.name, m.purl.u, "макс. из σ и f: "+n2(m.purl.u,2));
+  if (m.girt) chk("Стеновой ригель "+m.girt.p.name, m.girt.u, n2(m.girt.u,2));
+  if (m.fach) chk("Фахверк "+m.fach.p.name, m.fach.u, n2(m.fach.u,2));
+  if (m.crb)  chk("Подкрановая балка "+m.crb.p.name, m.crb.u, n2(m.crb.u,2));
+  $("checks").innerHTML = c;
+
+  /* ---- предупреждения ---- */
+  var w = m.warns.slice();
+  if (alt){
+    var diff = (alt.total - m.total)/1000;
+    w.unshift({c:0, t:(inp.rigel==="beam"?"Вариант с фермой: ":"Вариант с балкой: ")+
+      n2(alt.total/1000,2)+" т ("+(diff>0?"+":"−")+n2(Math.abs(diff),2)+" т, "+
+      (diff>0?"+":"−")+n2(Math.abs(diff)/(m.total/1000)*100,0)+" %)",
+      d:"Тот же габарит и те же нагрузки, изменён только тип ригеля: "+
+        (inp.rigel==="beam" ? "ферма" : "прокатная балка")+" — "+n2(alt.perM2,1)+" кг/м² против "+
+        n2(m.perM2,1)+" кг/м². Переключите «Тип ригеля», чтобы посмотреть сортамент."});
+  }
+  $("warns").innerHTML = w.map(function(x){
+    return '<div class="wn'+(x.c?" c":"")+'"><span class="ic">'+(x.c?"!":"i")+'</span><div><b>'+
+           esc(x.t)+'</b><br>'+esc(x.d)+'</div></div>';
+  }).join("");
+}
+
+function stat(k, v, u, hero){
+  return '<div class="stat'+(hero?" hero":"")+'"><span class="k">'+esc(k)+'</span>'+
+         '<span class="v'+(String(v).length>11?" long":"")+'">'+esc(v)+(u?' <small>'+esc(u)+'</small>':'')+'</span></div>';
+}
+function utilBar(u){
+  var cls = u>0.95?"c":(u>0.85?"w":"");
+  return '<span class="util '+cls+'"><span class="bar"><i style="width:'+Math.min(100,u*100).toFixed(0)+'%"></i></span>'+
+         '<span class="n">'+n2(u*100,0)+' %</span></span>';
+}
+
+/* ---------- события ---------- */
+$("rail").addEventListener("input", render);
+$("rail").addEventListener("change", function(e){
+  if (e.target.id==="crane"){ fillCraneQ(); }
+  render();
+});
+$("schemeSeg").addEventListener("click", function(e){
+  var b = e.target.closest("button"); if(!b) return;
+  scheme = b.dataset.s;
+  [].forEach.call(this.querySelectorAll("button"), function(x){
+    x.setAttribute("aria-pressed", String(x.dataset.s===scheme));
+  });
+  render();
+});
+$("printBtn").addEventListener("click", function(){ window.print(); });
+$("themeBtn").addEventListener("click", function(){
+  var r = document.documentElement;
+  var cur = r.getAttribute("data-theme");
+  var dark = cur ? cur==="dark"
+    : window.matchMedia("(prefers-color-scheme: dark)").matches;
+  r.setAttribute("data-theme", dark ? "light" : "dark");
+  try{ localStorage.setItem("km-theme", dark?"light":"dark"); }catch(e){}
+});
+try{ var th = localStorage.getItem("km-theme"); if(th) document.documentElement.setAttribute("data-theme", th); }catch(e){}
+
+fillCraneQ();
+render();
+</script>
+</body>
+</html>
