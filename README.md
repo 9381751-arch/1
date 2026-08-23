@@ -74,10 +74,40 @@ echo "module.exports = {compute, SCHEMES, phi};" >> engine.js
 Страница статическая — один файл `index.html` без сборки, поэтому годится любой
 веб-сервер: положить файл в веб-корень и открыть.
 
-### Автовыкладка на собственный сервер
+### Выкладка на свой сервер: сервер забирает сам (проще всего)
 
-`.github/workflows/deploy-server.yml` копирует `index.html` на сервер по SSH
-(rsync) при каждом пуше в `main` и по кнопке Run workflow. Настройка один раз:
+Не требует ни ключей в GitHub, ни доступа к серверу извне — сервер сам ходит за
+файлом. Репозиторий публичный, поэтому авторизация не нужна.
+
+```sh
+sudo curl -fsSL https://raw.githubusercontent.com/9381751-arch/1/main/deploy/pull-update.sh \
+     -o /usr/local/bin/karkas-update && sudo chmod +x /usr/local/bin/karkas-update
+sudo karkas-update                      # первая выкладка в /var/www/karkas
+```
+
+Автообновление каждые 10 минут — systemd-таймер:
+
+```sh
+base=https://raw.githubusercontent.com/9381751-arch/1/main/deploy
+sudo curl -fsSL $base/karkas-update.service -o /etc/systemd/system/karkas-update.service
+sudo curl -fsSL $base/karkas-update.timer   -o /etc/systemd/system/karkas-update.timer
+sudo systemctl enable --now karkas-update.timer
+systemctl list-timers karkas-update.timer
+```
+
+Другой веб-корень задаётся переменной: `sudo DEST=/var/www/example.ru/index.html karkas-update`
+(для таймера — строкой `Environment=DEST=…` в `karkas-update.service`).
+
+Что делает скрипт: шлёт `If-None-Match` и при 304 не трогает файл; проверяет
+размер и содержимое закачки перед подменой, так что оборванная загрузка не
+заменит живую страницу пустой; кладёт файл одним `mv`, без промежуточного
+состояния.
+
+### Автовыкладка на собственный сервер по SSH
+
+Вариант для тех, кому нужен push-деплой. `.github/workflows/deploy-server.yml`
+копирует `index.html` на сервер по SSH (rsync) при каждом пуше в `main` и по
+кнопке Run workflow. Настройка один раз:
 
 1. **На сервере** — каталог и отдельный ключ только для деплоя:
 
@@ -113,5 +143,7 @@ rsync запускается **без** `--delete`, чтобы не тронут
 ### Альтернатива: GitHub Pages
 
 `.github/workflows/pages.yml` публикует ту же страницу на
-`https://<owner>.github.io/<repo>/`. Требуется один раз включить Pages
-(Settings → Pages → Source: GitHub Actions).
+`https://<owner>.github.io/<repo>/`. Включается двумя действиями:
+Settings → Pages → Source: GitHub Actions, и переменная `PAGES_ENABLED=true`
+в Settings → Secrets and variables → Actions. Без переменной задание
+пропускается — учтите, что Pages делает страницу публичной.
