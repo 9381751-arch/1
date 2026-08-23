@@ -9,6 +9,8 @@
 #   secrets.DEPLOY_KNOWN_HOSTS — вывод `ssh-keyscan ваш-хост` (необязательно,
 #                                но так деплой не доверяет ключу вслепую)
 #   vars.DEPLOY_ENABLED      — "true", иначе задание пропускается
+#   vars.DEPLOY_URL          — публичный адрес страницы (необязательно);
+#                              если задан, после выкладки проверяется, что отдаётся 200
 #
 # Ключ лучше сделать отдельный, только для деплоя, и ограничить в
 # ~/.ssh/authorized_keys сервера: command="rsync --server ...",no-pty,no-port-forwarding
@@ -59,8 +61,18 @@ jobs:
           set -euo pipefail
           # без --delete: на сервере может лежать чужое содержимое
           rsync -avz --checksum \
+            --rsync-path="mkdir -p '$DEST' && rsync" \
             -e "ssh -i ~/.ssh/id_deploy -p ${PORT:-22} -o StrictHostKeyChecking=yes" \
             index.html "$USER@$HOST:$DEST/index.html"
+
+      - name: Проверить, что страница отдаётся
+        if: vars.DEPLOY_URL != ''
+        run: |
+          set -euo pipefail
+          code=$(curl -sS -o /tmp/page.html -w '%{http_code}' --max-time 20 "${{ vars.DEPLOY_URL }}")
+          echo "HTTP $code"
+          test "$code" = "200"
+          grep -q 'Каркас' /tmp/page.html && echo "страница на месте"
 
       - name: Убрать ключ
         if: always()

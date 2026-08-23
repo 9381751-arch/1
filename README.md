@@ -74,13 +74,44 @@ echo "module.exports = {compute, SCHEMES, phi};" >> engine.js
 Страница статическая — один файл `index.html` без сборки, поэтому годится любой
 веб-сервер: положить файл в веб-корень и открыть.
 
-В репозитории заведены два способа автоматической выкладки при пуше в `main`:
+### Автовыкладка на собственный сервер
 
-* `.github/workflows/pages.yml` — GitHub Pages, адрес вида
-  `https://<owner>.github.io/<repo>/`. Требуется один раз включить Pages
-  (Settings → Pages → Source: GitHub Actions).
-* `.github/workflows/deploy-server.yml` — rsync по SSH на собственный сервер.
-  Включается переменной `DEPLOY_ENABLED=true` и секретами `DEPLOY_HOST`,
-  `DEPLOY_USER`, `DEPLOY_PATH`, `DEPLOY_SSH_KEY` (плюс необязательные
-  `DEPLOY_PORT`, `DEPLOY_KNOWN_HOSTS`) в Settings → Secrets and variables → Actions.
-  Ключ задавайте отдельный, только для деплоя.
+`.github/workflows/deploy-server.yml` копирует `index.html` на сервер по SSH
+(rsync) при каждом пуше в `main` и по кнопке Run workflow. Настройка один раз:
+
+1. **На сервере** — каталог и отдельный ключ только для деплоя:
+
+   ```sh
+   sudo mkdir -p /var/www/karkas && sudo chown "$USER" /var/www/karkas
+   ssh-keygen -t ed25519 -f ~/.ssh/karkas_deploy -N "" -C "github-actions"
+   cat ~/.ssh/karkas_deploy.pub >> ~/.ssh/authorized_keys
+   ssh-keyscan -H "$(hostname -f)"        # понадобится для DEPLOY_KNOWN_HOSTS
+   cat ~/.ssh/karkas_deploy               # приватный ключ → в секрет DEPLOY_SSH_KEY
+   ```
+
+2. **В репозитории** — Settings → Secrets and variables → Actions:
+
+   | Тип | Имя | Значение |
+   |---|---|---|
+   | Secret | `DEPLOY_HOST` | хост или IP |
+   | Secret | `DEPLOY_USER` | пользователь SSH |
+   | Secret | `DEPLOY_PATH` | `/var/www/karkas` |
+   | Secret | `DEPLOY_SSH_KEY` | содержимое `~/.ssh/karkas_deploy` целиком |
+   | Secret | `DEPLOY_PORT` | порт, если не 22 — необязательно |
+   | Secret | `DEPLOY_KNOWN_HOSTS` | вывод `ssh-keyscan` — необязательно, но так деплой не доверяет ключу хоста вслепую |
+   | Variable | `DEPLOY_ENABLED` | `true` — без неё задание пропускается |
+   | Variable | `DEPLOY_URL` | публичный адрес — необязательно; если задан, после выкладки проверяется код 200 |
+
+3. **Веб-сервер** — пример блока nginx с HTTPS и вариантом «в подпапку уже
+   существующего сайта» лежит в `deploy/nginx.conf.example`.
+
+Приватный ключ нигде в репозитории не хранится и в логи не попадает: задание
+пишет его во временный файл раннера и удаляет в конце, даже если выкладка упала.
+rsync запускается **без** `--delete`, чтобы не тронуть остальное содержимое
+веб-корня, и сам создаёт каталог назначения, если его нет.
+
+### Альтернатива: GitHub Pages
+
+`.github/workflows/pages.yml` публикует ту же страницу на
+`https://<owner>.github.io/<repo>/`. Требуется один раз включить Pages
+(Settings → Pages → Source: GitHub Actions).

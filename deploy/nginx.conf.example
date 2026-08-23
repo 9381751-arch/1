@@ -1,0 +1,48 @@
+# Пример блока nginx для калькулятора.
+# Положить в /etc/nginx/sites-available/karkas, включить симлинком в sites-enabled,
+# проверить `nginx -t` и перезагрузить `systemctl reload nginx`.
+#
+# Каталог root должен совпадать с секретом DEPLOY_PATH в GitHub Actions.
+# Сертификат удобнее всего выпустить certbot'ом: certbot --nginx -d karkas.example.ru
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name karkas.example.ru;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name karkas.example.ru;
+
+    ssl_certificate     /etc/letsencrypt/live/karkas.example.ru/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/karkas.example.ru/privkey.pem;
+
+    root /var/www/karkas;
+    index index.html;
+
+    # страница целиком статическая, но обновляется при каждом деплое —
+    # держим короткий кэш, чтобы правки доезжали до вкладок сразу
+    location = /index.html {
+        add_header Cache-Control "no-cache, must-revalidate";
+    }
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    gzip on;
+    gzip_types text/html text/css application/javascript image/svg+xml;
+    gzip_min_length 1024;
+}
+
+# Если каталог отдаётся не отдельным доменом, а подпутём уже существующего сайта,
+# добавьте в нужный server{} только это:
+#
+# location /karkas/ {
+#     alias /var/www/karkas/;
+#     index index.html;
+# }
